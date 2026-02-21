@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>匯入班表</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial;max-width:980px;margin:28px auto;padding:0 14px}
+    .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    .card{border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px}
+    input,select,textarea,button{width:100%;padding:10px;margin-top:6px}
+    button{font-weight:700;cursor:pointer}
+    .small{opacity:.75;font-size:13px;line-height:1.4}
+    .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
+    .ok{color:#0a7a2f}
+    code{background:#f6f6f6;padding:2px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div>
+      <h1 style="margin:0">匯入班表</h1>
+      <div class="small" id="me_line">讀取中…</div>
+      <div class="small" id="dbg" style="margin-top:6px"></div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select id="site_sel" style="min-width:240px"></select>
+      <button id="btn_back" style="width:auto;padding:10px 14px">回主控台</button>
+      <button id="btn_logout" style="width:auto;padding:10px 14px">登出</button>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2 style="margin:0">上傳 Excel（.xlsx）</h2>
+    <div class="small" style="margin-top:8px;line-height:1.6">
+      支援格式：第 1 列是日期（B1 起），第 2 列是星期提示（可有可無），A 欄是姓名，交叉格是班別文字（空白會略過）。<br/>
+      匯入會先刪除同場域該日期區間的既有班表，再寫入新資料，用來「覆蓋」更新。<br/>
+      若你想改成「只新增不覆蓋」，我也能幫你改。
+    </div>
+
+    <input id="sched_file" type="file" accept=".xlsx" />
+    <button id="btn_import">開始匯入</button>
+    <div id="import_msg" class="msg"></div>
+
+    <div class="small" style="margin-top:10px">
+      小提醒：若你要讓「主頁上方顯示自己的今日/明日班表」，請先到 <code>人員對照</code> 把班表姓名連到帳號。
+    </div>
+  </section>
+
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    import * as XLSX from "https://esm.sh/xlsx@0.18.5";
+
+    const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const $ = (id) => document.getElementById(id);
+    function dbg(msg){ $("dbg").textContent = msg || ""; }
+    function setMsg(el, text, ok=false){
+      el.textContent = text || "";
+      el.className = ok ? "msg ok" : "msg";
+    }
+
+    function toISODateLocal(d){
+      const tz = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - tz).toISOString().slice(0,10);
+    }
+    function normDateCell(v){
+      if (!v) return null;
+      if (v instanceof Date && !isNaN(v.getTime())) return toISODateLocal(v);
+      if (typeof v === "number" && isFinite(v)){
+        const epoch = new Date(Date.UTC(1899, 11, 30));
+        const d = new Date(epoch.getTime() + v * 86400000);
+        return toISODateLocal(d);
+      }
+      if (typeof v === "string"){
+        const t = Date.parse(v);
+        if (!isNaN(t)) return toISODateLocal(new Date(t));
+      }
+      return null;
+    }
+
+    async function requireSession(){
+      const { data, error } = await supabase.auth.getSession();
+      if (error){ dbg("getSession error: " + error.message); return null; }
+      if (!data.session){ location.href = "./index.html"; return null; }
+      return data.session;
+    }
+
+    async function loadMe(){
+      const sess = await requireSession();
+      if (!sess) return null;
+
+      const uid = sess.user.id;
+      dbg("uid: " + uid);
+
+      const p = await supabase.from("profiles").select("username,display_name").eq("user_id", uid).single();
+      const m = await supabase.from("site_memberships").select("site_id,role,is_active").eq("user_id", uid).eq("is_active", true);
+
+      if (p.error){ $("me_line").textContent = "profile 讀取失敗：" + p.error.message; return null; }
+      if (m.error){ $("me_line").textContent = "membership 讀取失敗：" + m.error.message; return null; }
+
+      const name = p.data.display_name || "";
+      $("me_line").textContent = `帳號：${p.data.username}` + (name ? `｜姓名：${name}` : "") + `｜可用場域數：${(m.data||[]).length}`;
+
+      return { uid, memberships: m.data || [] };
+    }
+
+    async function loadSites(siteIds){
+      const s = await supabase.from("sites").select("id,code,name");
+      if (s.error) return [];
+      const map = {};
+      for (const it of (s.data||[])) map[it.id] = it;
+      return siteIds.map(id => map[id]).filter(Boolean);
+    }
+
+    function isManagerRole(role){
+      return role === "engineer" || role === "supervisor";
+    }
+
+    async function importScheduleXlsx(siteId, meUid){
+      const f = $("sched_file")?.files?.[0];
+      if (!f){ setMsg($("import_msg"), "請先選擇 .xlsx 檔案"); return; }
+
+      // 權限：主管/工程師
+      const mem = await supabase.from("site_memberships").select("role,is_active").eq("user_id", meUid).eq("site_id", siteId).eq("is_active", true).maybeSingle();
+      const role = mem.data?.role || "";
+      if (!isManagerRole(role)){
+        setMsg($("import_msg"), "只有主管/工程師可以匯入班表");
+        return;
+      }
+
+      setMsg($("import_msg"), "解析中…");
+
+      let rows;
+      try{
+        const buf = await f.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array", cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+      }catch(e){
+        setMsg($("import_msg"), "Excel 解析失敗：" + (e?.message || String(e)));
+        return;
+      }
+
+      if (!rows || rows.length < 3){
+        setMsg($("import_msg"), "檔案內容太少，至少要有：第1列日期、第3列起人員資料");
+        return;
+      }
+
+      const dateRow = rows[0] || [];
+      const dataStartRow = 2;
+
+      const dateCols = [];
+      for (let c = 1; c < dateRow.length; c++){ // B欄起
+        const iso = normDateCell(dateRow[c]);
+        if (iso) dateCols.push({ c, iso });
+      }
+
+      if (!dateCols.length){
+        setMsg($("import_msg"), "找不到日期列（第 1 列 B1 起）");
+        return;
+      }
+
+      const allDates = dateCols.map(x => x.iso).sort();
+      const minDate = allDates[0];
+      const maxDate = allDates[allDates.length - 1];
+
+      const out = [];
+      for (let r = dataStartRow; r < rows.length; r++){ // 第3列起
+        const name = String(rows[r]?.[0] ?? "").trim();
+        if (!name) continue;
+
+        for (const dc of dateCols){
+          const v = rows[r]?.[dc.c];
+          const shift = String(v ?? "").trim();
+          if (!shift) continue;
+          out.push({
+            site_id: siteId,
+            work_date: dc.iso,
+            person_name: name,
+            shift,
+            imported_by: meUid
+          });
+        }
+      }
+
+      if (!out.length){
+        setMsg($("import_msg"), "沒有可匯入的班表內容（交叉格皆空白）");
+        return;
+      }
+
+// 匯入名單（本月）：檔案內出現的姓名
+const namesInFile = Array.from(new Set(out.map(x => (x.person_name||"").trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b,"zh-Hant"));
+const ym = String(minDate).slice(0,7); // 假設同一個月（YYYY-MM）
+
+
+      setMsg($("import_msg"), `準備寫入 ${out.length} 筆（${minDate} ～ ${maxDate}）\n先清除既有區間資料…`);
+
+      const del = await supabase
+        .from("site_schedules")
+        .delete()
+        .eq("site_id", siteId)
+        .gte("work_date", minDate)
+        .lte("work_date", maxDate);
+
+      if (del.error){
+        setMsg($("import_msg"), "清除舊資料失敗（可能被 RLS 擋住）：" + del.error.message);
+        return;
+      }
+
+
+// 先把「本月名單」替換成檔案內的姓名（只影響該月，不影響舊資料）
+// 1) 刪除本月名單
+const delRoster = await supabase
+  .from("site_month_people")
+  .delete()
+  .eq("site_id", siteId)
+  .eq("ym", ym);
+if (delRoster.error){
+  setMsg($("import_msg"), "更新本月名單失敗（可能尚未建立 site_month_people 或被 RLS 擋住）：" + delRoster.error.message);
+  return;
+}
+
+// 2) 寫入新名單
+if (namesInFile.length){
+  const rosterRows = namesInFile.map(n => ({ site_id: siteId, ym, person_name: n }));
+  const insRoster = await supabase.from("site_month_people").insert(rosterRows);
+  if (insRoster.error){
+    setMsg($("import_msg"), "寫入本月名單失敗：" + insRoster.error.message);
+    return;
+  }
+}
+
+      const chunkSize = 500;
+      for (let i = 0; i < out.length; i += chunkSize){
+        const chunk = out.slice(i, i + chunkSize);
+        const ins = await supabase.from("site_schedules").insert(chunk);
+        if (ins.error){
+          setMsg($("import_msg"), `寫入失敗（第 ${i+1}～${i+chunk.length} 筆）：` + ins.error.message);
+          return;
+        }
+      }
+
+      setMsg($("import_msg"), `匯入完成：${out.length} 筆（${minDate} ～ ${maxDate}）`, true);
+    }
+
+    async function main(){
+      $("btn_back").addEventListener("click", () => location.href = "./app.html");
+      $("btn_logout").addEventListener("click", async () => {
+        await supabase.auth.signOut();
+        location.href = "./index.html";
+      });
+
+      const me = await loadMe();
+      if (!me) return;
+
+      const siteIds = me.memberships.map(x => x.site_id);
+      const siteList = await loadSites(siteIds);
+
+      const sel = $("site_sel");
+      sel.innerHTML = "";
+      for (const s of siteList){
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.code})`;
+        sel.appendChild(opt);
+      }
+
+      const qs = new URLSearchParams(location.search);
+      const qSite = qs.get("site_id");
+      const initSite = (qSite && siteIds.includes(qSite)) ? qSite : (siteList[0]?.id || "");
+      if (!initSite){
+        setMsg($("import_msg"), "你目前沒有可用場域（membership 為 0）");
+        return;
+      }
+      sel.value = initSite;
+
+      $("btn_import").addEventListener("click", async () => {
+        setMsg($("import_msg"), "");
+        await importScheduleXlsx(sel.value, me.uid);
+      });
+    }
+
+    main();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1038 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>主控台</title>
+  <style>
+      /* ===== 今日班表縮小版 ===== */
+  #today_card {
+    height:700px;
+    max-height:none;
+    overflow:hidden;
+    width: 10%;
+    min-width: 50px;
+    max-height: none;
+    overflow: visible;
+    font-size: 0.45rem;
+    line-height: 1;
+    padding: 5px;
+  }
+
+  #today_card h2 {
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+  }
+
+  #today_card .task {
+    padding: 3px 4px;
+    border-radius: 6px;
+  }
+
+  #today_card strong {
+    font-weight: 400;
+    font-size: 0.8rem;
+  }
+
+  #today_card .small {
+    font-size: 0.7rem;
+  }
+    body{font-family:system-ui,Segoe UI,Arial;max-width:980px;margin:28px auto;padding:0 14px}
+    .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    .card{border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px}
+    input,select,textarea,button{width:100%;padding:10px;margin-top:6px}
+    textarea{min-height:90px}
+    button{font-weight:700;cursor:pointer}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+    .small{opacity:.75;font-size:13px;line-height:1.4}
+    .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
+    .task{border:1px solid #e2e2e2;border-radius:10px;padding:12px}
+    .doneby{margin-top:8px;color:#b00020;font-weight:700;white-space:pre-wrap}
+    #my_shift_line{font-size:12px;opacity:.85;line-height:1.2}
+    #btn_mapping{font-size:12px}
+    #btn_import_page{font-size:12px}
+    #btn_schedule_view{font-size:12px}
+    /* ===== 頂部個人班表強化樣式 ===== */
+
+    #my_shift_line {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:14px;        /* 整體放大 */
+      font-weight:600;
+    }
+
+    .shift-label {
+      color:#666;
+      font-weight:500;
+    }
+
+    .shift-today {
+      background:#e3f2fd;
+      color:#0d47a1;
+      padding:4px 10px;
+      border-radius:16px;
+      font-size:15px;        /* 今日更大 */
+    }
+
+    
+.shift-next {
+  background:#fff3e0;
+  color:#7a4b00;
+  padding:4px 10px;
+  border-radius:16px;
+  font-size:15px;
+}
+
+.shift-tomorrow {
+
+      background:#f3e5f5;
+      color:#4a148c;
+      padding:4px 10px;
+      border-radius:16px;
+      font-size:15px;
+    }
+    /* 讓 100% 寬度包含 padding / border，避免溢出卡片 */
+*, *::before, *::after { box-sizing: border-box; }
+
+      /* 保險：表單元件確保不會因為長字或瀏覽器樣式撐爆 */
+      input, select, textarea, button {
+        max-width: 100%;
+      }
+
+  
+    /* ===== 我的任務（右側） ===== */
+    #mytasks_card .task {
+      padding: 8px;
+      border-radius: 8px;
+    }
+    #mytasks_card strong { font-size: 0.95rem; font-weight: 650; }
+    #mytasks_card .small { font-size: 12px; line-height: 1.25; }
+
+  
+/* ===== 班別顏色規則（主控台） ===== */
+.shift-red{
+  color:#d10000;
+  font-weight:700;
+}
+.shift-orange{
+  color:#e67e00;
+  font-weight:700;
+}
+</style>
+
+</head>
+<body>
+  <div class="bar">
+    <div>
+      <h1 id="page_title" style="margin:0">讀取中…</h1>
+      <div class="small" id="me_line">讀取中…</div>
+
+      <div class="small" id="dbg" style="margin-top:6px"></div>
+
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px">
+        <div class="small" id="my_shift_line">班表：讀取中…</div>
+        <button id="btn_mapping" style="width:auto;padding:6px 10px;display:none">人員對照</button>
+        <button id="btn_import_page" style="width:auto;padding:6px 10px;display:none">匯入班表</button>
+        <button id="btn_schedule_view" style="width:auto;padding:6px 10px;">查看班表</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select id="site_sel" style="min-width:180px"></select>
+      <button id="btn_logout" style="width:auto;padding:10px 14px">登出</button>
+    </div>
+  </div>
+
+  <!-- 今日班表（自動依目前場域顯示） -->
+   <div style="display:flex;gap:16px;align-items:flex-start">
+  <section class="card" id="today_card" style="
+    width:15%;
+   max-height:50vh;
+    overflow:auto;
+    font-size:0.85em;
+    ">
+    <h2 style="margin:0">今天班表</h2>
+    <div class="small" id="today_date_line" style="margin-top:6px"></div>
+    <div id="today_box" style="margin-top:10px;display:grid;gap:8px"></div>
+    <div id="today_msg" class="small" style="margin-top:10px"></div>
+  </section>
+
+  <!-- 我的任務（最近 5 筆：我建立或被指派） -->
+  <section class="card" id="mytasks_card" style="flex:1">
+    <h2 style="margin:0">我的任務（最近 5 筆）</h2>
+    <div id="mytasks_box" style="margin-top:10px;display:grid;gap:8px"></div>
+    <div id="mytasks_msg" class="small" style="margin-top:10px"></div>
+  </section>
+
+</div>
+
+  <!-- 匯入班表（僅工程師/主管可見） -->
+  <section class="card" id="import_card" style="display:none">
+    <h2 style="margin:0">匯入班表</h2>
+    <div class="small" style="margin-top:8px;line-height:1.5">
+      已搬到獨立頁面，避免主控台太擠。
+    </div>
+    <button id="btn_open_import" style="width:auto;padding:10px 14px;margin-top:10px">開啟匯入班表頁</button>
+    <div id="import_msg" class="msg"></div>
+</section>
+
+  <section class="card" style="flex:1">
+    <h2 style="margin:0">新增任務</h2>
+    <div class="grid" style="margin-top:10px">
+      <div>
+        <label>標題
+          <input id="task_title" placeholder="例如：巡檢清單更新" />
+        </label>
+      </div>
+      <div>
+        <label>狀態
+          <select id="task_status">
+            <option value="open" selected>open</option>
+            <option value="doing">doing</option>
+            <option value="done">done</option>
+          </select>
+        </label>
+      </div>
+    
+
+
+      <div>
+        <label>指派給（同場域，可複選）
+          <select id="task_assignees" multiple size="6"></select>
+        </label>
+      </div>
+</div>
+    <label>內容
+      <textarea id="task_body" placeholder="可空"></textarea>
+    </label>
+    <button id="btn_create">建立</button>
+    <div id="create_msg" class="msg"></div>
+    <div class="small" style="margin-top:10px">
+      權限靠 RLS：沒有 membership 的場域看不到也寫不了；跨場域靠多筆 membership。
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin:0">任務列表</h2>
+    <div id="tasks_box" style="display:grid;gap:10px;margin-top:12px"></div>
+    <div id="tasks_msg" class="small" style="margin-top:10px"></div>
+  </section>
+
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    // Excel 解析（SheetJS）
+    import * as XLSX from "https://esm.sh/xlsx@0.18.5";
+
+    // ====== 你要填這兩個（跟 index.html 同一組）======
+    const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
+    // ================================================
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const $ = (id) => document.getElementById(id);
+
+    function dbg(msg){
+      const el = document.getElementById("dbg");
+      el.textContent = msg || "";
+    }
+    function setText(el, t){ el.textContent = t || ""; }
+    function setMsg(el, t){ el.textContent = t || ""; }
+
+
+    // ====== 指派/人員名單輔助 ======
+    async function getSitePeople(siteId){
+      // 1) 先抓該場域所有 active membership 的 user_id
+      const m = await supabase
+        .from("site_memberships")
+        .select("user_id,role,is_active")
+        .eq("site_id", siteId)
+        .eq("is_active", true);
+
+      if (m.error){
+        return { error: m.error, people: [] };
+      }
+
+      const userIds = (m.data || []).map(x => x.user_id);
+      if (userIds.length === 0){
+        return { error: null, people: [] };
+      }
+
+      // 2) 再用 user_id 去 profiles 找名字（避免依賴外鍵 join）
+      const p = await supabase
+        .from("profiles")
+        .select("user_id,username,display_name")
+        .in("user_id", userIds);
+
+      if (p.error){
+        // profiles 失敗時仍可用 user_id 顯示
+        const people = userIds.map(uid => ({ user_id: uid, name: uid }));
+        return { error: null, people };
+      }
+
+      const map = {};
+      for (const it of (p.data || [])){
+        map[it.user_id] = it.display_name || it.username || it.user_id;
+      }
+      const people = userIds.map(uid => ({ user_id: uid, name: map[uid] || uid }));
+      return { error: null, people };
+    }
+
+    async function loadAssignees(siteId){
+      const sel = $("task_assignees");
+      const allBox = $("task_assign_all");
+      if (!sel) return;
+
+      sel.innerHTML = "";
+
+      const r = await getSitePeople(siteId);
+      if (r.error){
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "無法載入人員：" + r.error.message;
+        sel.appendChild(opt);
+        return;
+      }
+
+      for (const it of r.people){
+        const opt = document.createElement("option");
+        opt.value = it.user_id;
+        opt.textContent = it.name;
+        sel.appendChild(opt);
+      }
+
+      // 勾選「全體」時禁用多選
+      if (allBox){
+        const sync = () => {
+          const on = allBox.checked;
+          sel.disabled = on;
+          if (on){
+            // 全體模式下清空選取，避免誤會
+            for (const o of sel.options) o.selected = false;
+          }
+        };
+        allBox.removeEventListener("change", allBox.__syncAssignAll || (()=>{}));
+        allBox.__syncAssignAll = sync;
+        allBox.addEventListener("change", sync);
+        sync();
+      }
+    }
+    // =================================
+
+
+    async function requireSession(){
+      const { data, error } = await supabase.auth.getSession();
+      if (error){
+        dbg("getSession error: " + error.message);
+        return null;
+      }
+      if (!data.session){
+        dbg("尚未登入，跳回登入頁");
+        location.href = "./index.html";
+        return null;
+      }
+      return data.session;
+    }
+
+    async function loadMe(){
+      const sess = await requireSession();
+      if (!sess) return null;
+
+      const uid = sess.user.id;
+
+      const p = await supabase
+        .from("profiles")
+        .select("username,display_name")
+        .eq("user_id", uid)
+        .single();
+
+      const m = await supabase
+        .from("site_memberships")
+        .select("site_id,role,is_active,user_id")
+        .eq("user_id", uid)
+        .eq("is_active", true);
+
+      if (p.error){
+        setText($("me_line"), "profile 讀取失敗：" + p.error.message);
+        dbg("profiles error: " + p.error.message);
+        return null;
+      }
+      if (m.error){
+        setText($("me_line"), "membership 讀取失敗：" + m.error.message);
+        dbg("membership error: " + m.error.message);
+        return null;
+      }
+
+      const username = p.data.username;
+      const name = p.data.display_name || "";
+      const memberships = m.data || [];
+
+      setText($("me_line"),
+        `帳號：${username}` + (name ? `｜姓名：${name}` : "") +
+        `｜可用場域數：${memberships.length}`
+      );
+
+      return { uid, username, memberships };
+    }
+
+    async function loadSites(siteIds){
+      // 讀取 sites，並只顯示 membership 內的
+      const s = await supabase.from("sites").select("id,code,name");
+      if (s.error){
+        dbg((document.getElementById("dbg").textContent || "") + " | sites error: " + s.error.message);
+        return { map:{}, list:[] };
+      }
+
+      const map = {};
+      for (const it of s.data) map[it.id] = it;
+
+      const list = siteIds.map(id => map[id]).filter(Boolean);
+      return { map, list };
+    }
+
+    async function refreshTasks(siteId, meUid){
+      const box = $("tasks_box");
+      box.innerHTML = "";
+      setText($("tasks_msg"), "讀取中…");
+
+      const t = await supabase
+        .from("tasks")
+        .select("id,site_id,title,body,status,created_at,created_by,assign_all")
+        .eq("site_id", siteId)
+        .order("created_at", { ascending: false });
+
+      if (t.error){
+        setText($("tasks_msg"), "tasks 讀取失敗：" + t.error.message);
+        return;
+      }
+
+      const rows = t.data || [];
+      if (rows.length === 0){
+        setText($("tasks_msg"), "目前沒有任務");
+        return;
+      }
+
+      setText($("tasks_msg"), `共 ${rows.length} 筆`);
+
+      // 取得同場域人員名稱對照表（user_id -> name）
+      const peopleRes = await getSitePeople(siteId);
+      const nameMap = {};
+      for (const it of (peopleRes.people || [])){
+        nameMap[it.user_id] = it.name;
+      }
+
+      const taskIds = rows.map(r => r.id);
+
+      // 取得 task_assignees（若表不存在或無權限，會顯示錯誤，但不致於整頁壞掉）
+      const assRes = await supabase
+        .from("task_assignees")
+        .select("task_id,user_id")
+        .in("task_id", taskIds);
+
+      const assMap = {}; // task_id -> [user_id]
+      if (!assRes.error){
+        for (const it of (assRes.data || [])){
+          if (!assMap[it.task_id]) assMap[it.task_id] = [];
+          assMap[it.task_id].push(it.user_id);
+        }
+      }
+
+      // 取得 task_completions
+      const cRes = await supabase
+        .from("task_completions")
+        .select("task_id,user_id,completed_at")
+        .in("task_id", taskIds)
+        .order("completed_at", { ascending: false });
+
+      const compMap = {}; // task_id -> [{user_id, completed_at}]
+      if (!cRes.error){
+        for (const it of (cRes.data || [])){
+          if (!compMap[it.task_id]) compMap[it.task_id] = [];
+          compMap[it.task_id].push(it);
+        }
+      }
+
+      for (const r of rows){
+        const explicit = assMap[r.id] || [];
+        const isAll = !!r.assign_all;
+        const assigneeNames = isAll
+          ? "同場域全體"
+          : (explicit.length ? explicit.map(uid => nameMap[uid] || uid).join("、") : "未指派");
+
+        const canComplete = !!meUid && (isAll || explicit.includes(meUid));
+        const myCompleted = !!meUid && (compMap[r.id] || []).some(x => x.user_id === meUid);
+
+        const doneLine = (compMap[r.id] && compMap[r.id].length)
+          ? "已完成：" + compMap[r.id]
+              .slice(0, 5) // 最多顯示 5 筆，避免太長
+              .map(x => (nameMap[x.user_id] || x.user_id) + "（" + new Date(x.completed_at).toLocaleString() + "）")
+              .join("\n")
+          : "";
+
+        const div = document.createElement("div");
+        div.className = "task";
+        div.innerHTML = `
+          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <strong>${escapeHtml(r.title)}</strong>
+            <span class="small">${new Date(r.created_at).toLocaleString()}</span>
+          </div>
+          ${r.body ? `<div style="margin-top:8px;white-space:pre-wrap">${escapeHtml(r.body)}</div>` : ""}
+          <div class="small" style="margin-top:8px">指派：${escapeHtml(assigneeNames)}</div>
+          <div class="small" style="margin-top:6px">status：${escapeHtml(r.status)}</div>
+          ${doneLine ? `<div class="doneby">${escapeHtml(doneLine)}</div>` : ``}
+          ${(canComplete && !myCompleted && r.status !== "done")
+            ? `<button data-done="${r.id}" style="margin-top:10px">已完成</button>`
+            : ``}
+        `;
+
+        box.appendChild(div);
+
+        const doneBtn = div.querySelector('button[data-done]');
+        if (doneBtn){
+          doneBtn.addEventListener("click", async () => {
+            const id = doneBtn.getAttribute("data-done");
+
+            // 1) 記錄完成者（允許多人各自完成）
+            const insC = await supabase
+              .from("task_completions")
+              .insert({ task_id: id, user_id: meUid });
+
+            if (insC.error){
+              setText($("tasks_msg"), "完成紀錄寫入失敗：" + insC.error.message);
+              return;
+            }
+
+            // 2) 將任務狀態設為 done（如果你想「全體都完成才 done」，這段可改）
+            const up = await supabase
+              .from("tasks")
+              .update({ status: "done" })
+              .eq("id", id);
+
+            if (up.error){
+              setText($("tasks_msg"), "更新失敗：" + up.error.message);
+              return;
+            }
+
+            await refreshTasks(siteId, meUid);
+            await refreshMyTasksPanel(siteId, meUid);
+          });
+        }
+      }
+
+      if (assRes.error){
+        // 只提示一次，不中斷
+        setText($("tasks_msg"), `共 ${rows.length} 筆（注意：task_assignees 讀取失敗：${assRes.error.message}）`);
+      }
+      if (cRes.error){
+        setText($("tasks_msg"), `共 ${rows.length} 筆（注意：task_completions 讀取失敗：${cRes.error.message}）`);
+      }
+    }
+
+    async function refreshMyTasksPanel(siteId, meUid){
+      const box = document.getElementById("mytasks_box");
+      const msg = document.getElementById("mytasks_msg");
+      if (!box || !msg) return;
+
+      box.innerHTML = "";
+      msg.textContent = "讀取中…";
+
+      // 先抓近期任務（同場域）
+      const t = await supabase
+        .from("tasks")
+        .select("id,site_id,title,status,created_at,created_by,assign_all")
+        .eq("site_id", siteId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (t.error){
+        msg.textContent = "讀取失敗：" + t.error.message;
+        return;
+      }
+
+      const rows = t.data || [];
+      if (!rows.length){
+        msg.textContent = "目前沒有任務";
+        return;
+      }
+
+      const taskIds = rows.map(r => r.id);
+
+      // 找出「指派給我」的 task_id（只查這 50 筆裡的）
+      const ass = await supabase
+        .from("task_assignees")
+        .select("task_id")
+        .eq("user_id", meUid)
+        .in("task_id", taskIds);
+
+      const assignedSet = new Set((ass.error ? [] : (ass.data || []).map(x => x.task_id)));
+
+      // 我建立 OR 被指派 OR 全體
+      const mine = rows.filter(r =>
+        r.created_by === meUid || !!r.assign_all || assignedSet.has(r.id)
+      ).slice(0, 5);
+
+      if (!mine.length){
+        msg.textContent = "你目前沒有被指派或建立的近期任務";
+        return;
+      }
+
+      msg.textContent = `顯示 ${mine.length} / ${rows.length}`;
+
+      for (const r of mine){
+        const div = document.createElement("div");
+        div.className = "task";
+        div.innerHTML = `
+          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">
+            <strong>${escapeHtml(r.title || "")}</strong>
+            <span class="small">${new Date(r.created_at).toLocaleString()}</span>
+          </div>
+          <div class="small" style="margin-top:6px">status：${escapeHtml(r.status || "")}</div>
+        `;
+        box.appendChild(div);
+      }
+
+      if (ass.error){
+        msg.textContent = `顯示 ${mine.length} / ${rows.length}（注意：task_assignees 讀取失敗：${ass.error.message}）`;
+      }
+    }
+
+
+    function escapeHtml(s){
+      return (s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+
+    // ====== 班表（匯入/今日顯示）======
+    function roleLabel(role){
+      if (role === "engineer") return "工程師";
+      if (role === "supervisor") return "主管";
+      if (role === "employee") return "員工";
+      return role || "未知";
+    }
+
+    function isManagerRole(role){
+      return role === "engineer" || role === "supervisor";
+    }
+    function toISODateLocal(d){
+      // 轉成本地日期字串 YYYY-MM-DD（避免時區造成日期跑掉）
+      const tz = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - tz).toISOString().slice(0,10);
+    }
+    function normDateCell(v){
+      if (!v) return null;
+      if (v instanceof Date && !isNaN(v.getTime())) return toISODateLocal(v);
+      // 有些 Excel 可能是數字序列（視 raw/cellDates 而定）
+      if (typeof v === "number" && isFinite(v)){
+        // Excel 1900 date system
+        const epoch = new Date(Date.UTC(1899, 11, 30)); // 1899-12-30
+        const d = new Date(epoch.getTime() + v * 86400000);
+        return toISODateLocal(d);
+      }
+      // 若是字串日期
+      if (typeof v === "string"){
+        const t = Date.parse(v);
+        if (!isNaN(t)) return toISODateLocal(new Date(t));
+      }
+      return null;
+    }
+
+    async function refreshTodaySchedule(siteId){
+      const box = $("today_box");
+      const msg = $("today_msg");
+      const dateLine = $("today_date_line");
+      if (!box || !msg || !dateLine) return;
+
+      box.innerHTML = "";
+      msg.textContent = "讀取中…";
+
+      const today = toISODateLocal(new Date());
+      dateLine.textContent = "日期：" + today;
+
+      const q = await supabase
+        .from("site_schedules")
+        .select("person_name,shift")
+        .eq("site_id", siteId)
+        .eq("work_date", today)
+        .order("person_name", { ascending: true });
+
+      if (q.error){
+        msg.textContent = "班表讀取失敗：" + q.error.message;
+        return;
+      }
+
+      const rows = q.data || [];
+      if (!rows.length){
+        msg.textContent = "今天沒有班表資料（可由工程師/主管匯入）";
+        return;
+      }
+
+      msg.textContent = `共 ${rows.length} 人`;
+      for (const r of rows){
+        const div = document.createElement("div");
+        div.className = "task";
+        const shiftText = String(r.shift || "").trim();
+let cls = "";
+if (["休","休假","喪假","事假","病假"].includes(shiftText)){
+  cls = "shift-red";
+}
+if (["特休","行政"].includes(shiftText)){
+  cls = "shift-orange";
+}
+
+div.innerHTML = `
+  <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+    <strong>${escapeHtml(r.person_name || "")}</strong>
+    <span class="small ${cls}">${escapeHtml(shiftText)}</span>
+  </div>
+`;box.appendChild(div);
+      }
+    }
+
+
+    async function refreshMyScheduleLine(siteId, meUid){
+      const el = document.getElementById("my_shift_line");
+      if (!el) return;
+
+      const today = toISODateLocal(new Date());
+      const tomorrow = toISODateLocal(new Date(Date.now() + 86400000));
+
+      // 先從對照表找出「屬於我」的班表姓名（可能多筆）
+      const links = await supabase
+        .from("site_person_links")
+        .select("person_name")
+        .eq("site_id", siteId)
+        .eq("user_id", meUid);
+
+      if (links.error){
+        el.textContent = "班表：讀取失敗（對照表）：" + links.error.message;
+        return;
+      }
+
+      const names = (links.data || []).map(x => String(x.person_name||"").trim()).filter(Boolean);
+
+      if (!names.length){
+        el.textContent = "班表：尚未連結姓名（請用「人員對照」把班表姓名連到你的帳號）";
+        return;
+      }
+
+      // 查今天 + 明天（同一個查詢減少 roundtrip）
+      const q = await supabase
+        .from("site_schedules")
+        .select("work_date,person_name,shift")
+        .eq("site_id", siteId)
+        .in("person_name", names)
+        .in("work_date", [today, tomorrow]);
+
+      if (q.error){
+        el.textContent = "班表：讀取失敗：" + q.error.message;
+        return;
+      }
+
+      const rows = q.data || [];
+      const todayShifts = rows.filter(r => r.work_date === today).map(r => `${r.shift}`.trim()).filter(Boolean);
+      const tomShifts = rows.filter(r => r.work_date === tomorrow).map(r => `${r.shift}`.trim()).filter(Boolean);
+
+      const t1 = todayShifts.length ? todayShifts.join("、") : "（無）";
+      const t2 = tomShifts.length ? tomShifts.join("、") : "（無）";
+
+
+// 下一次「休/喪假/事假/病假/特休」日期（在明日之後）
+const dayAfterTomorrow = toISODateLocal(new Date(Date.now() + 2*86400000));
+const specialKinds = ["休","休假","喪假","事假","病假","特休"];
+
+const nextQ = await supabase
+  .from("site_schedules")
+  .select("work_date,shift,person_name")
+  .eq("site_id", siteId)
+  .in("person_name", names)
+  .in("shift", specialKinds)
+  .gte("work_date", dayAfterTomorrow)
+  .order("work_date", { ascending: true })
+  .limit(20);
+
+let nextSpecialText = "—";
+if (!nextQ.error){
+  const nxt = (nextQ.data || [])[0];
+  if (nxt){
+    nextSpecialText = `${nxt.work_date}（${String(nxt.shift||"").trim()}）`;
+  }
+}
+      el.innerHTML = `
+<span class="shift-label">班表</span>
+<span class="shift-today">今日：${escapeHtml(t1)}</span>
+<span class="shift-tomorrow">明日：${escapeHtml(t2)}</span>
+<span class="shift-next" style="background:#fff3e0;color:#7a4b00;padding:4px 10px;border-radius:16px;font-size:14px">
+  下一次假別：${escapeHtml(nextSpecialText)}
+</span>
+`;}
+
+    async function importScheduleXlsx(siteId, meUid){
+      const f = $("sched_file")?.files?.[0];
+      if (!f){
+        setMsg($("import_msg"), "請先選擇 .xlsx 檔案");
+        return;
+      }
+
+      setMsg($("import_msg"), "解析中…");
+
+      let rows;
+      try{
+        const buf = await f.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array", cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+      }catch(e){
+        setMsg($("import_msg"), "Excel 解析失敗：" + (e?.message || String(e)));
+        return;
+      }
+
+      if (!rows || rows.length < 3){
+        setMsg($("import_msg"), "檔案內容太少，至少要有：第1列日期、第3列起人員資料");
+        return;
+      }
+
+      const dateRow = rows[0] || [];
+      // 第 2 列通常是星期提示（可忽略）
+      const dataStartRow = 2;
+
+      // 蒐集所有日期欄位（B 欄起）
+      const dateCols = [];
+      for (let c = 1; c < dateRow.length; c++){
+        const iso = normDateCell(dateRow[c]);
+        if (iso){
+          dateCols.push({ c, iso });
+        }
+      }
+
+      if (!dateCols.length){
+        setMsg($("import_msg"), "找不到日期列（第 1 列 B1 起）");
+        return;
+      }
+
+      const allDates = dateCols.map(x => x.iso).sort();
+      const minDate = allDates[0];
+      const maxDate = allDates[allDates.length - 1];
+
+      // 轉成要寫入的資料列
+      const out = [];
+      for (let r = dataStartRow; r < rows.length; r++){
+        const name = String(rows[r]?.[0] ?? "").trim();
+        if (!name) continue;
+
+        for (const dc of dateCols){
+          const v = rows[r]?.[dc.c];
+          const shift = String(v ?? "").trim();
+          if (!shift) continue;
+
+          out.push({
+            site_id: siteId,
+            work_date: dc.iso,
+            person_name: name,
+            shift,
+            imported_by: meUid
+          });
+        }
+      }
+
+      if (!out.length){
+        setMsg($("import_msg"), "沒有可匯入的班表內容（交叉格皆空白）");
+        return;
+      }
+
+      setMsg($("import_msg"), `準備寫入 ${out.length} 筆（${minDate} ～ ${maxDate}）
+先清除既有區間資料…`);
+
+      // 1) 先刪除同場域該日期區間（讓匯入可覆蓋）
+      const del = await supabase
+        .from("site_schedules")
+        .delete()
+        .eq("site_id", siteId)
+        .gte("work_date", minDate)
+        .lte("work_date", maxDate);
+
+      if (del.error){
+        setMsg($("import_msg"), "清除舊資料失敗（可能被 RLS 擋住）：" + del.error.message);
+        return;
+      }
+
+      // 2) 分批插入（避免一次太大）
+      const chunkSize = 500;
+      for (let i = 0; i < out.length; i += chunkSize){
+        const chunk = out.slice(i, i + chunkSize);
+        const ins = await supabase.from("site_schedules").insert(chunk);
+        if (ins.error){
+          setMsg($("import_msg"), `寫入失敗（第 ${i+1}～${i+chunk.length} 筆）：` + ins.error.message);
+          return;
+        }
+      }
+
+      setMsg($("import_msg"), `匯入完成：${out.length} 筆（${minDate} ～ ${maxDate}）`, true);
+
+      // 立即刷新今天班表
+      await refreshTodaySchedule(siteId);
+      await refreshMyScheduleLine(siteId, meUid);
+    }
+    // ==================================
+
+    async function main(){
+      // 先綁登出（避免前面失敗時按鈕沒反應）
+      $("btn_logout").addEventListener("click", async () => {
+        await supabase.auth.signOut();
+        location.href = "./index.html";
+      });
+
+      const me = await loadMe();
+      if (!me){
+        setText($("tasks_msg"), "登入狀態或資料讀取失敗，請重新整理或重新登入。");
+        return;
+      }
+
+      const siteIds = me.memberships.map(x => x.site_id);
+      const { list: siteList } = await loadSites(siteIds);
+
+      const sel = $("site_sel");
+      sel.innerHTML = "";
+      for (const s of siteList){
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.code})`;
+        sel.appendChild(opt);
+      }
+
+      const currentSiteId = siteList[0]?.id || "";
+      if (!currentSiteId){
+        setText($("tasks_msg"), "你目前沒有可用場域（membership 為 0）。請由工程師/主管在後台建立 membership。");
+        return;
+      }
+      sel.value = currentSiteId;
+
+      // 顯示今天班表
+      await refreshTodaySchedule(currentSiteId);
+
+      // 匯入班表 UI（僅主管/工程師）
+      const roleNow = (me.memberships.find(x => x.site_id === currentSiteId)?.role) || "";
+      const siteNameNow = siteList.find(s => s.id === currentSiteId)?.name || "";
+      const titleEl = document.getElementById("page_title");
+      if (titleEl) titleEl.textContent = `${roleLabel(roleNow)} - ${siteNameNow || "未命名場域"}`;
+
+
+      // 顯示「我的 今日/明日 班表」（依目前場域）
+      await refreshMyScheduleLine(currentSiteId, me.uid);
+
+      // 人員對照（僅主管/工程師）按鈕：不遮蓋原本 UI，只是多一顆在頂部資訊旁
+      const mapBtn = document.getElementById("btn_mapping");
+      if (mapBtn){
+        mapBtn.style.display = isManagerRole(roleNow) ? "" : "none";
+        mapBtn.onclick = () => {
+          // 用新分頁開，避免打斷主控台操作
+          window.open(`./mapping.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
+        };
+      }
+
+      // 匯入班表（僅主管/工程師）：放在「人員對照」旁
+      const impBtn = document.getElementById("btn_import_page");
+      if (impBtn){
+        impBtn.style.display = isManagerRole(roleNow) ? "" : "none";
+        impBtn.onclick = () => {
+          window.open(`./schedule_import.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
+        };
+      }
+
+// 查看班表：所有人可看；主管/工程師在該頁可編輯
+const viewBtn = document.getElementById("btn_schedule_view");
+if (viewBtn){
+  viewBtn.onclick = () => {
+    window.open(`./schedule_view.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
+  };
+}
+
+      await loadAssignees(currentSiteId);
+
+      await refreshTasks(currentSiteId, me.uid);
+      await refreshMyTasksPanel(currentSiteId, me.uid);
+
+      sel.addEventListener("change", async () => {
+        setMsg($("create_msg"), "");
+        // 依場域更新：今天班表 + 匯入權限顯示
+        await refreshTodaySchedule(sel.value);
+        await refreshMyScheduleLine(sel.value, me.uid);
+
+        const roleCur = (me.memberships.find(x => x.site_id === sel.value)?.role) || "";
+        const siteNameCur = siteList.find(s => s.id === sel.value)?.name || "";
+        const titleEl = document.getElementById("page_title");
+        if (titleEl) titleEl.textContent = `${roleLabel(roleCur)} - ${siteNameCur || "未命名場域"}`;
+
+        const mapBtn = document.getElementById("btn_mapping");
+        if (mapBtn) mapBtn.style.display = isManagerRole(roleCur) ? "" : "none";
+        const impBtn = document.getElementById("btn_import_page");
+        if (impBtn) impBtn.style.display = isManagerRole(roleCur) ? "" : "none";
+
+        await loadAssignees(sel.value);
+        await refreshTasks(sel.value, me.uid);
+        await refreshMyTasksPanel(sel.value, me.uid);
+      });
+
+      $("btn_create").addEventListener("click", async () => {
+        setMsg($("create_msg"), "");
+        const siteId = sel.value;
+        const title = $("task_title").value.trim();
+        const body = $("task_body").value.trim();
+        const status = $("task_status").value;
+
+        const assignAll = $("task_assign_all")?.checked || false;
+        const assSel = $("task_assignees");
+        const assignees = assSel
+          ? Array.from(assSel.selectedOptions).map(o => o.value).filter(Boolean)
+          : [];
+
+        if (!title){
+          setMsg($("create_msg"), "請輸入標題");
+          return;
+        }
+
+        // 1) 建立 tasks
+        const ins = await supabase.from("tasks").insert({
+          site_id: siteId,
+          title,
+          body: body || null,
+          status,
+          created_by: me.uid,
+          assign_all: assignAll
+        }).select("id").single();
+
+        if (ins.error){
+          setMsg($("create_msg"), ins.error.message);
+          return;
+        }
+
+        const taskId = ins.data.id;
+
+        // 2) 若不是全體，寫入多位指派
+        if (!assignAll && assignees.length){
+          const rows = assignees.map(uid => ({ task_id: taskId, user_id: uid }));
+          const insA = await supabase.from("task_assignees").insert(rows);
+          if (insA.error){
+            setMsg($("create_msg"), "任務已建立，但指派寫入失敗：\n" + insA.error.message);
+          }
+        }
+
+        $("task_title").value = "";
+        $("task_body").value = "";
+        $("task_status").value = "open";
+        if ($("task_assign_all")) $("task_assign_all").checked = false;
+        if (assSel){
+          for (const o of assSel.options) o.selected = false;
+          assSel.disabled = false;
+        }
+
+        await loadAssignees(siteId);
+        await refreshTasks(siteId, me.uid);
+        await refreshMyTasksPanel(siteId, me.uid);
+      });
+    }
+
+    main();
+  </script>
+</body>
+</html>
