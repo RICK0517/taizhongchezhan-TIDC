@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>主控台</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial;max-width:980px;margin:28px auto;padding:0 14px}
+    .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    .card{border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px}
+    input,select,textarea,button{width:100%;padding:10px;margin-top:6px}
+    textarea{min-height:90px}
+    button{font-weight:700;cursor:pointer}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+    .small{opacity:.75;font-size:13px;line-height:1.4}
+    .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
+    .task{border:1px solid #e2e2e2;border-radius:10px;padding:12px}
+    .doneby{margin-top:8px;color:#b00020;font-weight:700;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div>
+      <h1 style="margin:0">主控台</h1>
+      <div class="small" id="me_line">讀取中…</div>
+      <div class="small" id="dbg" style="margin-top:6px"></div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select id="site_sel" style="min-width:240px"></select>
+      <button id="btn_logout" style="width:auto;padding:10px 14px">登出</button>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2 style="margin:0">新增任務</h2>
+    <div class="grid" style="margin-top:10px">
+      <div>
+        <label>標題
+          <input id="task_title" placeholder="例如：巡檢清單更新" />
+        </label>
+      </div>
+      <div>
+        <label>狀態
+          <select id="task_status">
+            <option value="open" selected>open</option>
+            <option value="doing">doing</option>
+            <option value="done">done</option>
+          </select>
+        </label>
+      </div>
+    
+
+
+      <div>
+        <label>指派給（同場域，可複選）
+          <select id="task_assignees" multiple size="6"></select>
+        </label>
+      </div>
+</div>
+    <label>內容
+      <textarea id="task_body" placeholder="可空"></textarea>
+    </label>
+    <button id="btn_create">建立</button>
+    <div id="create_msg" class="msg"></div>
+    <div class="small" style="margin-top:10px">
+      權限靠 RLS：沒有 membership 的場域看不到也寫不了；跨場域靠多筆 membership。
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin:0">任務列表</h2>
+    <div id="tasks_box" style="display:grid;gap:10px;margin-top:12px"></div>
+    <div id="tasks_msg" class="small" style="margin-top:10px"></div>
+  </section>
+
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+    // ====== 你要填這兩個（跟 index.html 同一組）======
+    const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
+    // ================================================
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const $ = (id) => document.getElementById(id);
+
+    function dbg(msg){
+      const el = document.getElementById("dbg");
+      el.textContent = msg || "";
+    }
+    function setText(el, t){ el.textContent = t || ""; }
+    function setMsg(el, t){ el.textContent = t || ""; }
+
+
+    // ====== 指派/人員名單輔助 ======
+    async function getSitePeople(siteId){
+      // 1) 先抓該場域所有 active membership 的 user_id
+      const m = await supabase
+        .from("site_memberships")
+        .select("user_id,role,is_active")
+        .eq("site_id", siteId)
+        .eq("is_active", true);
+
+      if (m.error){
+        return { error: m.error, people: [] };
+      }
+
+      const userIds = (m.data || []).map(x => x.user_id);
+      if (userIds.length === 0){
+        return { error: null, people: [] };
+      }
+
+      // 2) 再用 user_id 去 profiles 找名字（避免依賴外鍵 join）
+      const p = await supabase
+        .from("profiles")
+        .select("user_id,username,display_name")
+        .in("user_id", userIds);
+
+      if (p.error){
+        // profiles 失敗時仍可用 user_id 顯示
+        const people = userIds.map(uid => ({ user_id: uid, name: uid }));
+        return { error: null, people };
+      }
+
+      const map = {};
+      for (const it of (p.data || [])){
+        map[it.user_id] = it.display_name || it.username || it.user_id;
+      }
+      const people = userIds.map(uid => ({ user_id: uid, name: map[uid] || uid }));
+      return { error: null, people };
+    }
+
+    async function loadAssignees(siteId){
+      const sel = $("task_assignees");
+      const allBox = $("task_assign_all");
+      if (!sel) return;
+
+      sel.innerHTML = "";
+
+      const r = await getSitePeople(siteId);
+      if (r.error){
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "無法載入人員：" + r.error.message;
+        sel.appendChild(opt);
+        return;
+      }
+
+      for (const it of r.people){
+        const opt = document.createElement("option");
+        opt.value = it.user_id;
+        opt.textContent = it.name;
+        sel.appendChild(opt);
+      }
+
+      // 勾選「全體」時禁用多選
+      if (allBox){
+        const sync = () => {
+          const on = allBox.checked;
+          sel.disabled = on;
+          if (on){
+            // 全體模式下清空選取，避免誤會
+            for (const o of sel.options) o.selected = false;
+          }
+        };
+        allBox.removeEventListener("change", allBox.__syncAssignAll || (()=>{}));
+        allBox.__syncAssignAll = sync;
+        allBox.addEventListener("change", sync);
+        sync();
+      }
+    }
+    // =================================
+
+
+    async function requireSession(){
+      const { data, error } = await supabase.auth.getSession();
+      if (error){
+        dbg("getSession error: " + error.message);
+        return null;
+      }
+      if (!data.session){
+        dbg("尚未登入，跳回登入頁");
+        location.href = "./index.html";
+        return null;
+      }
+      dbg("登入者 email: " + (data.session.user.email || "(無)") + " | uid: " + data.session.user.id);
+      return data.session;
+    }
+
+    async function loadMe(){
+      const sess = await requireSession();
+      if (!sess) return null;
+
+      const uid = sess.user.id;
+
+      const p = await supabase
+        .from("profiles")
+        .select("username,display_name")
+        .eq("user_id", uid)
+        .single();
+
+      const m = await supabase
+        .from("site_memberships")
+        .select("site_id,role,is_active,user_id")
+        .eq("user_id", uid)
+        .eq("is_active", true);
+
+      if (p.error){
+        setText($("me_line"), "profile 讀取失敗：" + p.error.message);
+        dbg("profiles error: " + p.error.message);
+        return null;
+      }
+      if (m.error){
+        setText($("me_line"), "membership 讀取失敗：" + m.error.message);
+        dbg("membership error: " + m.error.message);
+        return null;
+      }
+
+      const username = p.data.username;
+      const name = p.data.display_name || "";
+      const memberships = m.data || [];
+
+      setText($("me_line"),
+        `帳號：${username}` + (name ? `｜姓名：${name}` : "") +
+        `｜可用場域數：${memberships.length}`
+      );
+
+      dbg((document.getElementById("dbg").textContent || "") + " | membership rows: " + memberships.length);
+
+      return { uid, username, memberships };
+    }
+
+    async function loadSites(siteIds){
+      // 讀取 sites，並只顯示 membership 內的
+      const s = await supabase.from("sites").select("id,code,name");
+      if (s.error){
+        dbg((document.getElementById("dbg").textContent || "") + " | sites error: " + s.error.message);
+        return { map:{}, list:[] };
+      }
+
+      const map = {};
+      for (const it of s.data) map[it.id] = it;
+
+      const list = siteIds.map(id => map[id]).filter(Boolean);
+      return { map, list };
+    }
+
+    async function refreshTasks(siteId, meUid){
+      const box = $("tasks_box");
+      box.innerHTML = "";
+      setText($("tasks_msg"), "讀取中…");
+
+      const t = await supabase
+        .from("tasks")
+        .select("id,site_id,title,body,status,created_at,created_by,assign_all")
+        .eq("site_id", siteId)
+        .order("created_at", { ascending: false });
+
+      if (t.error){
+        setText($("tasks_msg"), "tasks 讀取失敗：" + t.error.message);
+        return;
+      }
+
+      const rows = t.data || [];
+      if (rows.length === 0){
+        setText($("tasks_msg"), "目前沒有任務");
+        return;
+      }
+
+      setText($("tasks_msg"), `共 ${rows.length} 筆`);
+
+      // 取得同場域人員名稱對照表（user_id -> name）
+      const peopleRes = await getSitePeople(siteId);
+      const nameMap = {};
+      for (const it of (peopleRes.people || [])){
+        nameMap[it.user_id] = it.name;
+      }
+
+      const taskIds = rows.map(r => r.id);
+
+      // 取得 task_assignees（若表不存在或無權限，會顯示錯誤，但不致於整頁壞掉）
+      const assRes = await supabase
+        .from("task_assignees")
+        .select("task_id,user_id")
+        .in("task_id", taskIds);
+
+      const assMap = {}; // task_id -> [user_id]
+      if (!assRes.error){
+        for (const it of (assRes.data || [])){
+          if (!assMap[it.task_id]) assMap[it.task_id] = [];
+          assMap[it.task_id].push(it.user_id);
+        }
+      }
+
+      // 取得 task_completions
+      const cRes = await supabase
+        .from("task_completions")
+        .select("task_id,user_id,completed_at")
+        .in("task_id", taskIds)
+        .order("completed_at", { ascending: false });
+
+      const compMap = {}; // task_id -> [{user_id, completed_at}]
+      if (!cRes.error){
+        for (const it of (cRes.data || [])){
+          if (!compMap[it.task_id]) compMap[it.task_id] = [];
+          compMap[it.task_id].push(it);
+        }
+      }
+
+      for (const r of rows){
+        const explicit = assMap[r.id] || [];
+        const isAll = !!r.assign_all;
+        const assigneeNames = isAll
+          ? "同場域全體"
+          : (explicit.length ? explicit.map(uid => nameMap[uid] || uid).join("、") : "未指派");
+
+        const canComplete = !!meUid && (isAll || explicit.includes(meUid));
+        const myCompleted = !!meUid && (compMap[r.id] || []).some(x => x.user_id === meUid);
+
+        const doneLine = (compMap[r.id] && compMap[r.id].length)
+          ? "已完成：" + compMap[r.id]
+              .slice(0, 5) // 最多顯示 5 筆，避免太長
+              .map(x => (nameMap[x.user_id] || x.user_id) + "（" + new Date(x.completed_at).toLocaleString() + "）")
+              .join("\n")
+          : "";
+
+        const div = document.createElement("div");
+        div.className = "task";
+        div.innerHTML = `
+          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <strong>${escapeHtml(r.title)}</strong>
+            <span class="small">${new Date(r.created_at).toLocaleString()}</span>
+          </div>
+          ${r.body ? `<div style="margin-top:8px;white-space:pre-wrap">${escapeHtml(r.body)}</div>` : ""}
+          <div class="small" style="margin-top:8px">指派：${escapeHtml(assigneeNames)}</div>
+          <div class="small" style="margin-top:6px">status：${escapeHtml(r.status)}</div>
+          ${doneLine ? `<div class="doneby">${escapeHtml(doneLine)}</div>` : ``}
+          ${(canComplete && !myCompleted && r.status !== "done")
+            ? `<button data-done="${r.id}" style="margin-top:10px">已完成</button>`
+            : ``}
+        `;
+
+        box.appendChild(div);
+
+        const doneBtn = div.querySelector('button[data-done]');
+        if (doneBtn){
+          doneBtn.addEventListener("click", async () => {
+            const id = doneBtn.getAttribute("data-done");
+
+            // 1) 記錄完成者（允許多人各自完成）
+            const insC = await supabase
+              .from("task_completions")
+              .insert({ task_id: id, user_id: meUid });
+
+            if (insC.error){
+              setText($("tasks_msg"), "完成紀錄寫入失敗：" + insC.error.message);
+              return;
+            }
+
+            // 2) 將任務狀態設為 done（如果你想「全體都完成才 done」，這段可改）
+            const up = await supabase
+              .from("tasks")
+              .update({ status: "done" })
+              .eq("id", id);
+
+            if (up.error){
+              setText($("tasks_msg"), "更新失敗：" + up.error.message);
+              return;
+            }
+
+            await refreshTasks(siteId, meUid);
+          });
+        }
+      }
+
+      if (assRes.error){
+        // 只提示一次，不中斷
+        setText($("tasks_msg"), `共 ${rows.length} 筆（注意：task_assignees 讀取失敗：${assRes.error.message}）`);
+      }
+      if (cRes.error){
+        setText($("tasks_msg"), `共 ${rows.length} 筆（注意：task_completions 讀取失敗：${cRes.error.message}）`);
+      }
+    }
+    function escapeHtml(s){
+      return (s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function main(){
+      // 先綁登出（避免前面失敗時按鈕沒反應）
+      $("btn_logout").addEventListener("click", async () => {
+        await supabase.auth.signOut();
+        location.href = "./index.html";
+      });
+
+      const me = await loadMe();
+      if (!me){
+        setText($("tasks_msg"), "登入狀態或資料讀取失敗，請重新整理或重新登入。");
+        return;
+      }
+
+      const siteIds = me.memberships.map(x => x.site_id);
+      const { list: siteList } = await loadSites(siteIds);
+
+      const sel = $("site_sel");
+      sel.innerHTML = "";
+      for (const s of siteList){
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.code})`;
+        sel.appendChild(opt);
+      }
+
+      const currentSiteId = siteList[0]?.id || "";
+      if (!currentSiteId){
+        setText($("tasks_msg"), "你目前沒有可用場域（membership 為 0）。請由工程師/主管在後台建立 membership。");
+        return;
+      }
+      sel.value = currentSiteId;
+
+      await loadAssignees(currentSiteId);
+
+      await refreshTasks(currentSiteId, me.uid);
+
+      sel.addEventListener("change", async () => {
+        setMsg($("create_msg"), "");
+        await loadAssignees(sel.value);
+        await refreshTasks(sel.value, me.uid);
+      });
+
+      $("btn_create").addEventListener("click", async () => {
+        setMsg($("create_msg"), "");
+        const siteId = sel.value;
+        const title = $("task_title").value.trim();
+        const body = $("task_body").value.trim();
+        const status = $("task_status").value;
+
+        const assignAll = $("task_assign_all")?.checked || false;
+        const assSel = $("task_assignees");
+        const assignees = assSel
+          ? Array.from(assSel.selectedOptions).map(o => o.value).filter(Boolean)
+          : [];
+
+        if (!title){
+          setMsg($("create_msg"), "請輸入標題");
+          return;
+        }
+
+        // 1) 建立 tasks
+        const ins = await supabase.from("tasks").insert({
+          site_id: siteId,
+          title,
+          body: body || null,
+          status,
+          created_by: me.uid,
+          assign_all: assignAll
+        }).select("id").single();
+
+        if (ins.error){
+          setMsg($("create_msg"), ins.error.message);
+          return;
+        }
+
+        const taskId = ins.data.id;
+
+        // 2) 若不是全體，寫入多位指派
+        if (!assignAll && assignees.length){
+          const rows = assignees.map(uid => ({ task_id: taskId, user_id: uid }));
+          const insA = await supabase.from("task_assignees").insert(rows);
+          if (insA.error){
+            setMsg($("create_msg"), "任務已建立，但指派寫入失敗：\n" + insA.error.message);
+          }
+        }
+
+        $("task_title").value = "";
+        $("task_body").value = "";
+        $("task_status").value = "open";
+        if ($("task_assign_all")) $("task_assign_all").checked = false;
+        if (assSel){
+          for (const o of assSel.options) o.selected = false;
+          assSel.disabled = false;
+        }
+
+        await loadAssignees(siteId);
+        await refreshTasks(siteId, me.uid);
+      });
+    }
+
+    main();
+  </script>
+</body>
+</html>
