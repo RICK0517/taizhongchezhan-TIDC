@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>登入 / 建立帳號</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial;max-width:880px;margin:28px auto;padding:0 14px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media (max-width:860px){.row{grid-template-columns:1fr}}
+    .card{border:1px solid #ddd;border-radius:10px;padding:14px}
+    label{display:block;margin-top:10px}
+    input,select,button{width:100%;padding:10px;margin-top:6px}
+    button{font-weight:700;cursor:pointer}
+    .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
+    .ok{color:#0a7a2f}
+    .small{opacity:.75;font-size:13px;line-height:1.4}
+    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap}
+    code{background:#f6f6f6;padding:2px 6px;border-radius:6px}
+    /* 讓 100% 寬度包含 padding / border，避免溢出卡片 */
+      *, *::before, *::after { box-sizing: border-box; }
+
+        /* 保險：表單元件確保不會因為長字或瀏覽器樣式撐爆 */
+        input, select, textarea, button {
+          max-width: 100%;
+        }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div>
+      <h1 style="margin:0">場域系統</h1>
+      <div class="small">靜態前端 + Supabase（只輸入帳號密碼）</div>
+    </div>
+    <div class="small">
+      內部登入識別：<code>username@corp.local</code>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:16px">
+    <section class="card">
+      <h2 style="margin:0">登入</h2>
+      <label>帳號（username）
+        <input id="login_username" placeholder="例如：wangwei" autocomplete="username" />
+      </label>
+      <label>密碼
+        <input id="login_password" type="password" autocomplete="current-password" />
+      </label>
+      <button id="btn_login">登入</button>
+      <div id="login_msg" class="msg"></div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0">建立帳號</h2>
+      <div class="small">建立後會自動建立 profile + membership（身分、場域）</div>
+
+      <label>帳號（username）
+        <input id="reg_username" placeholder="例如：linya" autocomplete="username" />
+      </label>
+      <label>密碼（至少 6 字元）
+        <input id="reg_password" type="password" autocomplete="new-password" />
+      </label>
+      <label>姓名（可空）
+        <input id="reg_name" placeholder="例如：林雅" />
+      </label>
+
+      <label>身分
+        <select id="reg_role">
+          <option value="engineer">工程師</option>
+          <option value="supervisor">主管</option>
+          <option value="employee" selected>員工</option>
+        </select>
+      </label>
+
+      <label>場域
+        <select id="reg_site"></select>
+      </label>
+
+      <button id="btn_register">建立帳號</button>
+      <div id="reg_msg" class="msg"></div>
+      <div class="small" style="margin-top:10px">
+        若你要限制只能工程師/主管建帳，後續改成 Edge Function 版本即可。
+      </div>
+    </section>
+  </div>
+
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+    // ====== 你要填這兩個 ======
+    const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
+    // =========================
+
+    const AUTH_DOMAIN = "corp.local";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const $ = (id) => document.getElementById(id);
+
+    function toEmail(username){
+      return `${username.trim().toLowerCase()}@${AUTH_DOMAIN}`;
+    }
+
+    function setMsg(el, text, ok=false){
+      el.textContent = text || "";
+      el.className = ok ? "msg ok" : "msg";
+    }
+
+    async function loadSites(){
+      const sel = $("reg_site");
+      sel.innerHTML = "";
+      const { data, error } = await supabase.from("sites").select("id,code,name").order("name");
+      if (error){
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "無法載入場域";
+        sel.appendChild(opt);
+        setMsg($("reg_msg"), error.message);
+        return;
+      }
+      for (const s of data){
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.code})`;
+        sel.appendChild(opt);
+      }
+    }
+
+    // 已登入直接跳主控台
+    const { data: sess } = await supabase.auth.getSession();
+    if (sess.session) location.href = "./app.html";
+
+    await loadSites();
+
+    $("btn_login").addEventListener("click", async () => {
+      setMsg($("login_msg"), "");
+      const username = $("login_username").value;
+      const password = $("login_password").value;
+      if (!username || !password){
+        setMsg($("login_msg"), "請輸入帳號與密碼");
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email: toEmail(username),
+        password
+      });
+
+      if (error){
+        setMsg($("login_msg"), error.message);
+        return;
+      }
+      location.href = "./app.html";
+    });
+
+    $("btn_register").addEventListener("click", async () => {
+      setMsg($("reg_msg"), "");
+      const username = $("reg_username").value;
+      const password = $("reg_password").value;
+      const displayName = $("reg_name").value || null;
+      const role = $("reg_role").value;
+      const siteId = $("reg_site").value;
+
+      if (!username || !password || !siteId){
+        setMsg($("reg_msg"), "請填帳號、密碼、場域");
+        return;
+      }
+      if (password.length < 6){
+        setMsg($("reg_msg"), "密碼長度不足（至少 6）");
+        return;
+      }
+
+      // 1) 建立 auth user（內部用 email 欄位承載 username）
+      const signUp = await supabase.auth.signUp({
+        email: toEmail(username),
+        password
+      });
+
+      if (signUp.error){
+        setMsg($("reg_msg"), signUp.error.message);
+        return;
+      }
+
+      // signUp 後通常會自動登入（依 Supabase 設定）
+      const { data: s2 } = await supabase.auth.getSession();
+      const uid = s2.session?.user?.id;
+      if (!uid){
+        setMsg($("reg_msg"), "建立成功，但沒有 session。請回登入區登入。", true);
+        return;
+      }
+
+      // 2) 寫 profiles（RLS 允許自己寫自己）
+      const p = await supabase.from("profiles").upsert({
+        user_id: uid,
+        username: username.trim().toLowerCase(),
+        display_name: displayName
+      });
+
+      if (p.error){
+        setMsg($("reg_msg"), "profile 建立失敗：\n" + p.error.message);
+        return;
+      }
+
+      // 3) 寫 membership（注意：目前 policy 只有工程師/主管能管理 membership）
+      //    為了讓自註冊可用，這裡提供兩種策略：
+      //    A) 你先在 SQL 另外開一條「自註冊寫入自己 membership」的 insert policy（最簡單）
+      //    B) 之後改 Edge Function（企業版）
+
+      // 這裡先走 A：若你還沒加 policy，會看到 RLS 錯誤
+      const m = await supabase.from("site_memberships").insert({
+        user_id: uid,
+        site_id: siteId,
+        role
+      });
+
+      if (m.error){
+        setMsg($("reg_msg"),
+          "帳號已建立、profile 已建立。\n但 membership 寫入被 RLS 擋住：\n" +
+          m.error.message +
+          "\n\n做法：在 SQL 加一條「自註冊可寫自己的 membership」policy（下方提供）。"
+        );
+        return;
+      }
+
+      setMsg($("reg_msg"), "建立完成，準備進主控台", true);
+      location.href = "./app.html";
+    });
+  </script>
+
+  <hr style="margin:22px 0;opacity:.25" />
+
+  <div class="small">
+    <strong>自註冊 membership 允許政策（可選）</strong><br/>
+    想讓「一般員工自行建立帳號」可直接把自己掛到場域，請在 SQL 另外加：<br/><br/>
+    <code style="display:block;white-space:pre-wrap">
+create policy "memberships_insert_self"
+on public.site_memberships
+for insert
+to authenticated
+with check (user_id = auth.uid());
+    </code>
+    <br/>
+    企業內控常見做法：先不開這條，改用工程師/主管建立帳號或 Edge Function 建帳。
+  </div>
+</body>
+</html>
