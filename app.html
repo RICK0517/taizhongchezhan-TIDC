@@ -138,10 +138,12 @@
         <button id="btn_import_page" style="width:auto;padding:6px 10px;display:none">匯入班表</button>
         <button id="btn_schedule_view" style="width:auto;padding:6px 10px;">查看班表</button>
 
+        <button id="btn_stats" style="width:auto;padding:6px 10px;">假別統計</button>
         <button id="btn_leave_apply" style="width:auto;padding:6px 10px;">申請休假</button>
 
         <button id="btn_leave_review" style="width:auto;padding:6px 10px;display:none;position:relative">
           審核請假
+        <button onclick="window.open(`./staff_info.html?site_id=${document.getElementById('site_sel').value}`, '_self')" style="width:auto;padding:6px 10px;">人事資料</button>
           <span id="leave_badge" style="
             display:none;
             position:absolute;top:-3px;right:-3px;
@@ -969,7 +971,15 @@ if (viewBtn){
     window.open(`./schedule_view.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
   };
 }
-
+// === 新增以下邏輯 ===
+const statsBtn = document.getElementById("btn_stats");
+if (statsBtn){
+  statsBtn.onclick = () => {
+    // 開新分頁前往 stats.html
+    window.open(`./stats.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
+  };
+}
+// ===================
       
 
 // 申請休假：所有人可用

@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>人事資料管理</title>
+  <style>
+    body{font-family:system-ui,Arial;max-width:980px;margin:28px auto;padding:0 14px;background:#f5f7f9}
+    .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);margin-top:16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:16px}
+    label{display:block;margin-bottom:4px;font-size:13px;color:#666}
+    input, select{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box}
+    /* 唯讀狀態的樣式 */
+    input:disabled, select:disabled{background:#f0f2f5;color:#555;cursor:not-allowed;border-color:#eee}
+    
+    button{padding:12px 24px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer}
+    button:hover{background:#1d4ed8}
+    button.secondary{background:#64748b}
+    
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th, td{text-align:left;padding:12px;border-bottom:1px solid #eee}
+    th{background:#f8fafc;font-weight:600}
+    .hidden{display:none}
+    .msg{margin-top:10px;padding:10px;border-radius:6px;font-size:14px}
+    .error{background:#fee2e2;color:#b91c1c}
+    .success{background:#dcfce7;color:#15803d}
+  </style>
+</head>
+<body>
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h1 style="margin:0">人事資料管理</h1>
+    <button class="secondary" onclick="location.href='./app.html'" style="width:auto;padding:8px 16px;">回主控台</button>
+  </div>
+
+  <div id="loading_msg" style="text-align:center;margin-top:20px;color:#666">系統讀取中...</div>
+  <div id="error_display" class="msg error hidden"></div>
+
+  <section id="manager_view" class="card hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2 style="margin:0">場域人員名單</h2>
+      <div id="site_info" style="font-size:13px;color:#666"></div>
+    </div>
+    <div style="overflow-x:auto">
+        <table id="staff_table">
+        <thead>
+            <tr>
+            <th>姓名</th>
+            <th>編號</th>
+            <th>行動電話</th>
+            <th>操作</th>
+            </tr>
+        </thead>
+        <tbody id="staff_list"></tbody>
+        </table>
+    </div>
+  </section>
+
+  <section id="form_view" class="card hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 id="form_title" style="margin:0">個人資料卡</h2>
+        <span id="role_badge" style="font-size:12px;padding:4px 8px;border-radius:12px;background:#eee"></span>
+    </div>
+    
+    <div id="readonly_hint" class="msg hidden" style="background:#e0f2fe;color:#0369a1;margin-bottom:16px">
+        ℹ️ 您目前為唯讀模式，如需修改資料請聯繫主管。
+    </div>
+
+    <form id="info_form">
+      <h3 style="font-size:16px;border-left:4px solid #2563eb;padding-left:8px;margin-bottom:12px">基本資料</h3>
+      <div class="grid">
+        <div><label>姓名</label><input name="display_name" id="input_name" disabled></div>
+        <div><label>入職日期 </label><input type="date" name="entry_date"></div>
+        <div><label>員工編號</label><input name="staff_no"></div>
+        <div><label>身分證字號</label><input name="id_number"></div>
+        <div><label>性別</label>
+          <select name="gender">
+              <option value="">請選擇</option>
+              <option value="男">男</option>
+              <option value="女">女</option>
+          </select>
+        </div>
+        <div><label>國籍</label><input name="nationality" value="台灣"></div>
+        <div><label>出生日期</label><input type="date" name="birthday"></div>
+        <div><label>婚姻</label>
+          <select name="marriage">
+              <option value="">請選擇</option>
+              <option value="未婚">未婚</option>
+              <option value="已婚">已婚</option>
+          </select>
+        </div>
+        <div><label>子女數</label><input type="number" name="children_count" value="0"></div>
+        <div><label>最高學歷</label><input name="education"></div>
+      </div>
+
+      <h3 style="font-size:16px;border-left:4px solid #2563eb;padding-left:8px;margin:24px 0 12px 0">聯絡資訊</h3>
+      <div class="grid">
+        <div><label>行動電話</label><input name="phone_mobile"></div>
+        <div><label>通訊電話</label><input name="phone_comm"></div>
+        <div><label>住宅電話</label><input name="phone_home"></div>
+        <div><label>電子信箱</label><input type="email" name="email"></div>
+      </div>
+      <div style="margin-top:16px">
+        <label>戶籍地址</label><input name="address_legal">
+      </div>
+      <div style="margin-top:16px">
+        <label>聯絡地址</label><input name="address_comm">
+      </div>
+
+      <h3 style="font-size:16px;border-left:4px solid #2563eb;padding-left:8px;margin:24px 0 12px 0">財務資訊</h3>
+      <div style="margin-top:16px">
+        <label>轉帳帳號 (銀行代碼+帳號)</label><input name="bank_account">
+      </div>
+      
+      <div style="margin-top:30px;display:flex;gap:12px;border-top:1px solid #eee;padding-top:20px">
+        <button type="submit" id="btn_save" class="hidden">儲存變更</button>
+        <button type="button" id="btn_back_list" class="secondary hidden">返回列表</button>
+      </div>
+      <div id="save_msg" class="msg hidden"></div>
+    </form>
+  </section>
+
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    
+    // === 請填入您的 Supabase 設定 ===
+    const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
+    // =============================
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const $ = (id) => document.getElementById(id);
+
+    let currentUid = "";
+    let myUid = "";
+    let myRole = ""; // 'supervisor', 'engineer', 'employee'
+    let sitePeopleMap = {};
+    
+    const currentSiteId = new URLSearchParams(window.location.search).get("site_id");
+
+    function showError(msg) {
+        $("loading_msg").style.display = "none";
+        const el = $("error_display");
+        el.textContent = msg;
+        el.classList.remove("hidden");
+    }
+
+    async function init() {
+      try {
+        const { data: { session }, error: authError } = await supabase.auth.getSession();
+        if (authError || !session) { location.href="./index.html"; return; }
+        myUid = session.user.id;
+
+        if (!currentSiteId) {
+            showError("錯誤：網址缺少 site_id，請從主控台進入。");
+            return;
+        }
+
+        // 取得身分
+        const { data: mem } = await supabase.from("site_memberships")
+            .select("role")
+            .eq("user_id", myUid)
+            .eq("site_id", currentSiteId)
+            .eq("is_active", true)
+            .maybeSingle();
+
+        if (!mem) { showError("您在此場域無權限"); return; }
+        myRole = mem.role;
+
+        // 取得場域資訊
+        const { data: siteData } = await supabase.from("sites").select("name").eq("id", currentSiteId).single();
+        if(siteData) $("site_info").textContent = `場域：${siteData.name}`;
+
+        $("loading_msg").style.display = "none";
+
+        // 分流：主管 vs 員工
+        if (['supervisor', 'engineer'].includes(myRole)) {
+            await showManagerView();
+        } else {
+            // 員工只能看自己，傳入 true 代表 "isReadOnly"
+            await showForm(myUid, "本人", true);
+        }
+
+      } catch (e) {
+        showError("初始化失敗：" + e.message);
+      }
+    }
+
+    // === 主管列表視圖 ===
+    async function showManagerView() {
+      $("manager_view").classList.remove("hidden");
+      $("form_view").classList.add("hidden");
+      
+      const { data: people, error } = await supabase.rpc("get_site_people", { p_site_id: currentSiteId });
+      if (error) { showError(error.message); return; }
+
+      people.forEach(p => sitePeopleMap[p.user_id] = p.display_name || p.username);
+
+      const { data: pii } = await supabase.from("personal_profiles")
+        .select("user_id, staff_no, phone_mobile")
+        .eq("site_id", currentSiteId);
+      const piiMap = {};
+      if(pii) pii.forEach(p => piiMap[p.user_id] = p);
+
+      const list = $("staff_list");
+      list.innerHTML = "";
+      people.forEach(p => {
+        const info = piiMap[p.user_id] || {};
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td style="font-weight:bold">${p.display_name || p.username}</td>
+          <td>${info.staff_no || '-'}</td>
+          <td>${info.phone_mobile || '-'}</td>
+          <td><button onclick="window.editStaff('${p.user_id}')" style="padding:6px 12px;font-size:13px">編輯</button></td>
+        `;
+        list.appendChild(tr);
+      });
+    }
+
+    window.editStaff = (uid) => {
+      const name = sitePeopleMap[uid] || "未知";
+      $("btn_back_list").classList.remove("hidden");
+      // 主管進入編輯：isReadOnly = false
+      showForm(uid, name, false);
+    };
+
+    // === 顯示表單 (核心邏輯) ===
+    async function showForm(uid, nameDisplay, isReadOnly) {
+      currentUid = uid;
+      
+      $("manager_view").classList.add("hidden");
+      $("form_view").classList.remove("hidden");
+      $("save_msg").classList.add("hidden");
+      $("info_form").reset();
+
+      // 設定 UI 狀態
+      const formElements = $("info_form").querySelectorAll("input, select");
+      
+      if (isReadOnly) {
+          // 員工模式：全部鎖定，隱藏儲存鈕，顯示提示
+          formElements.forEach(el => el.disabled = true);
+          $("btn_save").classList.add("hidden");
+          $("readonly_hint").classList.remove("hidden");
+          $("role_badge").textContent = "檢視模式";
+      } else {
+          // 主管模式：全部解鎖，顯示儲存鈕
+          formElements.forEach(el => el.disabled = false);
+          $("btn_save").classList.remove("hidden");
+          $("readonly_hint").classList.add("hidden");
+          $("role_badge").textContent = "編輯模式 (主管)";
+      }
+
+      // 預填姓名
+      $("input_name").value = nameDisplay;
+
+      // 讀取詳細資料
+      const { data: profile } = await supabase.from("personal_profiles")
+        .select("*")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (profile) {
+        const form = $("info_form");
+        Object.keys(profile).forEach(key => {
+          if (form.elements[key]) form.elements[key].value = profile[key] || "";
+        });
+      }
+    }
+
+    // === 儲存 (使用 RPC) ===
+    $("info_form").onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = $("btn_save");
+      const msgEl = $("save_msg");
+      
+      btn.textContent = "儲存中...";
+      btn.disabled = true;
+
+      try {
+        const fd = new FormData(e.target);
+        
+        // 呼叫後端函數 (因為涉及兩個 Table 的更新與權限檢查)
+        const { error } = await supabase.rpc("admin_update_staff", {
+            p_target_uid: currentUid,
+            p_site_id: currentSiteId,
+            p_display_name: fd.get("display_name"), // 姓名
+            p_staff_no: fd.get("staff_no"),
+            p_id_number: fd.get("id_number"),
+            p_gender: fd.get("gender"),
+            p_nationality: fd.get("nationality"),
+            p_birthday: fd.get("birthday") || null,
+            p_marriage: fd.get("marriage"),
+            p_children_count: Number(fd.get("children_count") || 0),
+            p_education: fd.get("education"),
+            p_phone_mobile: fd.get("phone_mobile"),
+            p_phone_comm: fd.get("phone_comm"),
+            p_phone_home: fd.get("phone_home"),
+            p_email: fd.get("email"),
+            p_address_legal: fd.get("address_legal"),
+            p_address_comm: fd.get("address_comm"),
+            p_bank_account: fd.get("bank_account"),
+            p_entry_date: fd.get("entry_date") || null  // 新增這一行
+        });
+
+        if (error) throw error;
+
+        msgEl.textContent = "✅ 資料已更新 (含姓名與詳細資料)";
+        msgEl.className = "msg success";
+        msgEl.classList.remove("hidden");
+
+      } catch (err) {
+        msgEl.textContent = "❌ 儲存失敗：" + err.message;
+        msgEl.className = "msg error";
+        msgEl.classList.remove("hidden");
+      } finally {
+        btn.textContent = "儲存變更";
+        btn.disabled = false;
+      }
+    };
+
+    $("btn_back_list").onclick = () => {
+      $("form_view").classList.add("hidden");
+      showManagerView();
+    };
+
+    init();
+  </script>
+</body>
+</html>

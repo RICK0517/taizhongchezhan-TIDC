@@ -12,10 +12,14 @@
     input,select,button{max-width:100%}
     input,select{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px}
     button{padding:10px 14px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer}
+    button:hover{background:#f5f5f5}
     .small{opacity:.75;font-size:13px;line-height:1.4}
     .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
     .task{border:1px solid #e2e2e2;border-radius:10px;padding:12px}
     .pill{display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid #ddd;font-size:12px;opacity:.9}
+    .pill.pending{background:#fff7ed;color:#c2410c;border-color:#ffedd5}
+    .pill.approved{background:#f0fdf4;color:#15803d;border-color:#dcfce7}
+    .pill.rejected{background:#fef2f2;color:#b91c1c;border-color:#fee2e2}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     .photo-thumb{max-width:120px;border-radius:8px;border:1px solid #eee;margin-top:10px;cursor:pointer;display:block}
   </style>
@@ -37,13 +41,13 @@
     <div class="row">
       <div style="min-width:220px;flex:1"><div class="small">狀態</div>
         <select id="status_sel">
-          <option value="pending">審核中（待處理）</option>
+          <option value="pending" selected>審核中（待處理）</option>
           <option value="approved">已通過（歷史）</option>
           <option value="rejected">未通過（歷史）</option>
           <option value="all">全部</option>
         </select>
       </div>
-      <button id="btn_refresh" style="border-color:#111;margin-top:20px">更新</button>
+      <button id="btn_refresh" style="border-color:#111;margin-top:20px">更新列表</button>
     </div>
     <div id="msg" class="msg"></div>
   </section>
@@ -56,10 +60,35 @@
   const $ = (id) => document.getElementById(id);
   function escapeHtml(s){ return (s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function isManagerRole(role){ return role === "engineer" || role === "supervisor"; }
-  function roleLabel(role){ if (role==="engineer") return "工程師"; if (role==="supervisor") return "主管"; return "員工"; }
+  
+  // 這裡請填入你的 Supabase URL 與 Key
+  const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   $("btn_back").onclick = () => location.href = "./app.html";
-  const sb = supabase.createClient("https://whbllncddoqbwukstxel.supabase.co", "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2");
+  $("btn_logout").onclick = async () => { await sb.auth.signOut(); location.href = "./index.html"; };
+
+  // 定義審核函數 (放在全域，讓 HTML 按鈕可以呼叫)
+  window.decide = async (id, status) => {
+    const actionText = status === 'approved' ? '通過' : '拒絕';
+    if (!confirm(`確定要「${actionText}」這筆申請嗎？`)) return;
+    
+    // 呼叫後端 RPC 函數
+    const { error } = await sb.rpc("decide_leave_request", { 
+      p_request_id: id, 
+      p_decision: status 
+    });
+
+    if (error) {
+      alert("處理失敗：" + error.message);
+      console.error(error);
+    } else {
+      alert("已更新！");
+      // 重新整理頁面以顯示最新狀態
+      location.reload();
+    }
+  };
 
   async function loadMe(){
     const { data: { session } } = await sb.auth.getSession();
@@ -67,67 +96,114 @@
     const uid = session.user.id;
     const p = await sb.from("profiles").select("username,display_name").eq("user_id", uid).maybeSingle();
     const m = await sb.from("site_memberships").select("site_id,role").eq("user_id", uid).eq("is_active", true);
-    return { uid, username: p.data?.username || "User", memberships: m.data || [] };
+    
+    const name = p.data?.display_name || p.data?.username || "User";
+    $("me_line").textContent = `登入者：${name}`;
+    
+    return { uid, memberships: m.data || [] };
   }
 
-  async function render(siteId, me, roleCur){
-    const box = $("box"); box.innerHTML = `<div class="small">讀取中…</div>`;
-    if (!isManagerRole(roleCur)){ box.innerHTML = "權限不足"; return; }
+  async function render(siteId, roleCur){
+    const box = $("box"); 
+    box.innerHTML = `<div class="small">讀取中…</div>`;
+    
+    if (!isManagerRole(roleCur)){ 
+      box.innerHTML = "權限不足：只有工程師或主管可以審核。"; 
+      return; 
+    }
 
+    // 1. 取得該場域所有人員名稱 (Mapping)
     const pr = await sb.rpc("get_site_people", { p_site_id: siteId });
-    const nameMap = {}; (pr.data || []).forEach(x => nameMap[x.user_id] = x.display_name || x.user_id);
+    const nameMap = {}; 
+    if(pr.data) (pr.data || []).forEach(x => nameMap[x.user_id] = x.display_name || x.user_id);
 
+    // 2. 查詢請假單
     const st = $("status_sel").value;
     let q = sb.from("leave_requests").select("*").eq("site_id", siteId).order("created_at", { ascending:false });
     if (st !== "all") q = q.eq("status", st);
 
-    const { data: rows, error } = await q.limit(100);
-    if (error) { box.innerHTML = "錯誤：" + error.message; return; }
+    const { data: rows, error } = await q.limit(50);
+    
+    if (error) { 
+      box.innerHTML = `<div class="msg">讀取錯誤：${error.message}</div>`; 
+      return; 
+    }
 
-    box.innerHTML = rows.length ? "" : "無資料";
+    if (!rows || rows.length === 0){
+        box.innerHTML = `<div class="small">目前沒有${st==='pending'?'待審核':''}資料</div>`;
+        return;
+    }
+
+    box.innerHTML = "";
     for (const r of rows){
-      const who = nameMap[r.requester_id] || r.requester_id;
+      const who = nameMap[r.requester_id] || "未知人員";
+      
+      // 處理圖片
       let imgHtml = "";
       if (r.photo_path) {
         const { data } = sb.storage.from('leave-photos').getPublicUrl(r.photo_path);
-        imgHtml = `<a href="${data.publicUrl}" target="_blank"><img src="${data.publicUrl}" class="photo-thumb" title="點擊看大圖"></a>`;
+        imgHtml = `<div style="margin-top:8px"><a href="${data.publicUrl}" target="_blank"><img src="${data.publicUrl}" class="photo-thumb" title="點擊看大圖"></a></div>`;
       }
+
+      // 日期顯示 (如果是同一天只顯示一個，不同天顯示範圍)
+      const dateStr = r.date_from === r.date_to ? r.date_from : `${r.date_from} ~ ${r.date_to}`;
 
       const div = document.createElement("div");
       div.className = "task";
       div.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <strong>${escapeHtml(who)}｜${escapeHtml(r.leave_type)}｜${escapeHtml(r.date_from)}</strong>
-          <span class="pill">${r.status}</span>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div>
+            <div style="font-weight:700;font-size:15px">${escapeHtml(who)} <span style="font-weight:400;color:#666">申請</span> ${escapeHtml(r.leave_type)}</div>
+            <div class="small" style="color:#333;margin-top:4px">日期：${escapeHtml(dateStr)}</div>
+          </div>
+          <span class="pill ${r.status}">${r.status}</span>
         </div>
-        <div class="small">${new Date(r.created_at).toLocaleString()}</div>
-        ${r.note ? `<div class="small" style="margin-top:8px">${escapeHtml(r.note)}</div>` : ""}
+        
+        ${r.note ? `<div style="background:#f9f9f9;padding:6px;border-radius:6px;margin-top:8px;font-size:14px;color:#444">${escapeHtml(r.note)}</div>` : ""}
+        
         ${imgHtml}
+        
+        <div class="small" style="margin-top:8px;color:#999">申請時間：${new Date(r.created_at).toLocaleString()}</div>
+
         ${r.status === "pending" ? `
-          <div style="margin-top:10px">
-            <button onclick="decide('${r.id}', 'approved')">通過</button>
-            <button onclick="decide('${r.id}', 'rejected')">拒絕</button>
+          <div style="margin-top:12px;border-top:1px solid #eee;padding-top:10px;display:flex;gap:10px">
+            <button style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-weight:700" onclick="decide('${r.id}', 'approved')">通過</button>
+            <button style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;font-weight:700" onclick="decide('${r.id}', 'rejected')">拒絕</button>
           </div>` : ""}
       `;
       box.appendChild(div);
     }
   }
 
-  window.decide = async (id, status) => {
-    if (!confirm("確定處理？")) return;
-    const { error } = await sb.rpc("decide_leave_request", { p_request_id: id, p_decision: status });
-    if (error) alert(error.message); else location.reload();
-  };
-
   (async () => {
-    const me = await loadMe(); if (!me) return;
-    const sites = (await sb.from("sites").select("*").in("id", me.memberships.map(m=>m.site_id))).data;
+    const me = await loadMe(); 
+    if (!me) return;
+
+    // 載入該使用者的場域
+    const {data: sites} = await sb.from("sites").select("*").in("id", me.memberships.map(m=>m.site_id));
     const sel = $("site_sel");
-    sites.forEach(s => { const opt = document.createElement("option"); opt.value=s.id; opt.textContent=s.name; sel.appendChild(opt); });
-    const initRole = me.memberships.find(m=>m.site_id===sel.value)?.role;
-    await render(sel.value, me, initRole);
-    sel.onchange = () => render(sel.value, me, me.memberships.find(m=>m.site_id===sel.value)?.role);
-    $("btn_refresh").onclick = () => sel.onchange();
+    
+    if(!sites || sites.length === 0) {
+        $("msg").textContent = "你目前沒有所屬場域。";
+        return;
+    }
+
+    sites.forEach(s => { 
+        const opt = document.createElement("option"); 
+        opt.value=s.id; 
+        opt.textContent=s.name; 
+        sel.appendChild(opt); 
+    });
+
+    const getRole = (sid) => me.memberships.find(m=>m.site_id===sid)?.role;
+
+    // 初次渲染
+    await render(sel.value, getRole(sel.value));
+
+    // 事件監聽
+    sel.onchange = () => render(sel.value, getRole(sel.value));
+    $("status_sel").onchange = () => render(sel.value, getRole(sel.value));
+    $("btn_refresh").onclick = () => render(sel.value, getRole(sel.value));
   })();
 </script>
 </body>
