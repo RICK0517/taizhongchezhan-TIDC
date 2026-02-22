@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>審核請假</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;margin:0;background:#fafafa}
+    .bar{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px;background:#fff;border-bottom:1px solid #e8e8e8;flex-wrap:wrap}
+    .card{background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:14px;margin:16px}
+    input,select,button{max-width:100%}
+    input,select{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px}
+    button{padding:10px 14px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer}
+    .small{opacity:.75;font-size:13px;line-height:1.4}
+    .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
+    .task{border:1px solid #e2e2e2;border-radius:10px;padding:12px}
+    .pill{display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid #ddd;font-size:12px;opacity:.9}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .photo-thumb{max-width:120px;border-radius:8px;border:1px solid #eee;margin-top:10px;cursor:pointer;display:block}
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div>
+      <div style="font-weight:700;font-size:18px">審核請假</div>
+      <div class="small" id="me_line">讀取中…</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select id="site_sel" style="min-width:220px"></select>
+      <button id="btn_back" style="width:auto">回主控台</button>
+      <button id="btn_logout" style="width:auto">登出</button>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="row">
+      <div style="min-width:220px;flex:1"><div class="small">狀態</div>
+        <select id="status_sel">
+          <option value="pending">審核中（待處理）</option>
+          <option value="approved">已通過（歷史）</option>
+          <option value="rejected">未通過（歷史）</option>
+          <option value="all">全部</option>
+        </select>
+      </div>
+      <button id="btn_refresh" style="border-color:#111;margin-top:20px">更新</button>
+    </div>
+    <div id="msg" class="msg"></div>
+  </section>
+
+  <section class="card">
+    <div id="box" style="display:grid;gap:10px"></div>
+  </section>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  function escapeHtml(s){ return (s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function isManagerRole(role){ return role === "engineer" || role === "supervisor"; }
+  function roleLabel(role){ if (role==="engineer") return "工程師"; if (role==="supervisor") return "主管"; return "員工"; }
+
+  $("btn_back").onclick = () => location.href = "./app.html";
+  const sb = supabase.createClient("https://whbllncddoqbwukstxel.supabase.co", "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2");
+
+  async function loadMe(){
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { location.href = "./index.html"; return null; }
+    const uid = session.user.id;
+    const p = await sb.from("profiles").select("username,display_name").eq("user_id", uid).maybeSingle();
+    const m = await sb.from("site_memberships").select("site_id,role").eq("user_id", uid).eq("is_active", true);
+    return { uid, username: p.data?.username || "User", memberships: m.data || [] };
+  }
+
+  async function render(siteId, me, roleCur){
+    const box = $("box"); box.innerHTML = `<div class="small">讀取中…</div>`;
+    if (!isManagerRole(roleCur)){ box.innerHTML = "權限不足"; return; }
+
+    const pr = await sb.rpc("get_site_people", { p_site_id: siteId });
+    const nameMap = {}; (pr.data || []).forEach(x => nameMap[x.user_id] = x.display_name || x.user_id);
+
+    const st = $("status_sel").value;
+    let q = sb.from("leave_requests").select("*").eq("site_id", siteId).order("created_at", { ascending:false });
+    if (st !== "all") q = q.eq("status", st);
+
+    const { data: rows, error } = await q.limit(100);
+    if (error) { box.innerHTML = "錯誤：" + error.message; return; }
+
+    box.innerHTML = rows.length ? "" : "無資料";
+    for (const r of rows){
+      const who = nameMap[r.requester_id] || r.requester_id;
+      let imgHtml = "";
+      if (r.photo_path) {
+        const { data } = sb.storage.from('leave-photos').getPublicUrl(r.photo_path);
+        imgHtml = `<a href="${data.publicUrl}" target="_blank"><img src="${data.publicUrl}" class="photo-thumb" title="點擊看大圖"></a>`;
+      }
+
+      const div = document.createElement("div");
+      div.className = "task";
+      div.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <strong>${escapeHtml(who)}｜${escapeHtml(r.leave_type)}｜${escapeHtml(r.date_from)}</strong>
+          <span class="pill">${r.status}</span>
+        </div>
+        <div class="small">${new Date(r.created_at).toLocaleString()}</div>
+        ${r.note ? `<div class="small" style="margin-top:8px">${escapeHtml(r.note)}</div>` : ""}
+        ${imgHtml}
+        ${r.status === "pending" ? `
+          <div style="margin-top:10px">
+            <button onclick="decide('${r.id}', 'approved')">通過</button>
+            <button onclick="decide('${r.id}', 'rejected')">拒絕</button>
+          </div>` : ""}
+      `;
+      box.appendChild(div);
+    }
+  }
+
+  window.decide = async (id, status) => {
+    if (!confirm("確定處理？")) return;
+    const { error } = await sb.rpc("decide_leave_request", { p_request_id: id, p_decision: status });
+    if (error) alert(error.message); else location.reload();
+  };
+
+  (async () => {
+    const me = await loadMe(); if (!me) return;
+    const sites = (await sb.from("sites").select("*").in("id", me.memberships.map(m=>m.site_id))).data;
+    const sel = $("site_sel");
+    sites.forEach(s => { const opt = document.createElement("option"); opt.value=s.id; opt.textContent=s.name; sel.appendChild(opt); });
+    const initRole = me.memberships.find(m=>m.site_id===sel.value)?.role;
+    await render(sel.value, me, initRole);
+    sel.onchange = () => render(sel.value, me, me.memberships.find(m=>m.site_id===sel.value)?.role);
+    $("btn_refresh").onclick = () => sel.onchange();
+  })();
+</script>
+</body>
+</html>

@@ -187,36 +187,37 @@
       return q.data || [];
     }
 
-    async function saveRow(siteId, dateISO, tr){
-      const name = tr.querySelector('[data-k="name"]').value.trim();
-      const shift = tr.querySelector('[data-k="shift"]').value.trim();
-      const orig = (tr.dataset.origName || "").trim();
+      async function saveRow(siteId, dateISO, tr){
+        const name = tr.querySelector('[data-k="name"]').value.trim();
+        const shift = tr.querySelector('[data-k="shift"]').value.trim();
+        const orig = (tr.dataset.origName || "").trim();
 
-      if (!name) throw new Error("姓名不可空白");
+        if (!name) throw new Error("姓名不可空白");
 
-      // 如果改了姓名：先刪原 key 再 upsert 新 key
-      if (orig && orig !== name){
+        // 1) 先刪除：以「原本的 key」優先
+        //    - 如果原本有姓名(orig)，先刪 orig 那筆
+        //    - 如果原本沒有（新增列），就刪 name 那筆（避免重複點儲存造成衝突）
+        const keyNameToDelete = orig || name;
+
         const del = await supabase
           .from("site_schedules")
           .delete()
           .eq("site_id", siteId)
           .eq("work_date", dateISO)
-          .eq("person_name", orig);
-        if (del.error) throw new Error("刪除舊姓名失敗：" + del.error.message);
+          .eq("person_name", keyNameToDelete);
+
+        if (del.error) throw new Error("刪除失敗：" + del.error.message);
+
+        // 2) 再新增（insert）：刪乾淨後再寫入就不會衝突
+        const ins = await supabase
+          .from("site_schedules")
+          .insert({ site_id: siteId, work_date: dateISO, person_name: name, shift, imported_by: null });
+
+        if (ins.error) throw new Error("儲存失敗：" + ins.error.message);
+
+        // 3) 更新 origName（讓下次刪除用新 key）
+        tr.dataset.origName = name;
       }
-
-      const up = await supabase
-        .from("site_schedules")
-        .upsert(
-          { site_id: siteId, work_date: dateISO, person_name: name, shift, imported_by: null },
-          { onConflict: "site_id,work_date,person_name" }
-        );
-
-      if (up.error) throw new Error("儲存失敗：" + up.error.message);
-
-      tr.dataset.origName = name;
-    }
-
     async function deleteRow(siteId, dateISO, tr){
       const orig = (tr.dataset.origName || "").trim() || tr.querySelector('[data-k="name"]').value.trim();
       if (!orig) return;

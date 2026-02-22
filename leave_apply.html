@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>申請休假</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;margin:0;background:#fafafa}
+    .bar{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px;background:#fff;border-bottom:1px solid #e8e8e8;flex-wrap:wrap}
+    .card{background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:14px;margin:16px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+    input,select,textarea,button{max-width:100%}
+    input,select,textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px}
+    textarea{min-height:90px;resize:vertical}
+    button{padding:10px 14px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer}
+    .small{opacity:.75;font-size:13px;line-height:1.4}
+    .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
+    .ok{color:#0a7a1f}
+    .task{border:1px solid #e2e2e2;border-radius:10px;padding:12px}
+    .pill{display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid #ddd;font-size:12px;opacity:.9}
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div>
+      <div style="font-weight:700;font-size:18px">申請休假</div>
+      <div class="small" id="me_line">讀取中…</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select id="site_sel" style="min-width:220px"></select>
+      <button id="btn_back" style="width:auto">回主控台</button>
+      <button id="btn_logout" style="width:auto">登出</button>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="grid">
+      <div>
+        <label class="small">假別</label>
+        <select id="leave_type">
+          <option value="事假">事假</option>
+          <option value="病假">病假</option>
+          <option value="生理假">生理假</option>
+          <option value="喪假">喪假</option>
+          <option value="特休">特休</option>
+        </select>
+      </div>
+      <div>
+        <label class="small">請假日期（起）</label>
+        <input id="date_from" type="date" />
+        <div style="height:8px"></div>
+        <label class="small">請假日期（迄，空白=同一天）</label>
+        <input id="date_to" type="date" />
+      </div>
+    </div>
+
+    <div style="height:10px"></div>
+    <label class="small">文字敘述（可空）</label>
+    <textarea id="note" placeholder="例如：就醫、家中臨時狀況…"></textarea>
+
+    <div style="height:10px"></div>
+    <label class="small">照片（證明文件）</label>
+    <input id="photo" type="file" accept="image/*" />
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
+      <button id="btn_submit" style="border-color:#111">送出申請</button>
+      <span class="small">送出後等待主管/工程師審核</span>
+    </div>
+
+    <div id="msg" class="msg"></div>
+  </section>
+
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <div style="font-weight:700">我的申請</div>
+      <div class="small" id="hint">顯示最近 50 筆</div>
+    </div>
+    <div id="my_box" style="display:grid;gap:10px;margin-top:12px"></div>
+  </section>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  function escapeHtml(s){ return (s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function setMsg(t, ok=false){ const el=$("msg"); el.textContent=t||""; el.className = ok ? "msg ok" : "msg"; }
+  function getQueryParam(k){ return new URL(location.href).searchParams.get(k); }
+
+  $("btn_back").onclick = () => location.href = "./app.html";
+  $("btn_logout").onclick = async () => {
+    try{ if (window.__sb) await window.__sb.auth.signOut(); }catch(e){}
+    location.href = "./index.html";
+  };
+
+  const { createClient } = window.supabase;
+  const sb = createClient("https://whbllncddoqbwukstxel.supabase.co", "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2");
+  window.__sb = sb;
+
+  async function requireSession(){
+    const { data, error } = await sb.auth.getSession();
+    if (error) throw new Error("session：" + error.message);
+    if (!data.session) { location.href = "./index.html"; return null; }
+    return data.session;
+  }
+
+  async function loadMe(){
+    const sess = await requireSession();
+    if (!sess) return null;
+    const uid = sess.user.id;
+    const p = await sb.from("profiles").select("username,display_name").eq("user_id", uid).maybeSingle();
+    const m = await sb.from("site_memberships").select("site_id,role,is_active").eq("user_id", uid).eq("is_active", true);
+    if (m.error) throw new Error("membership：" + m.error.message);
+    return { uid, username: p.data?.username || uid.slice(0,8), name: p.data?.display_name || "", memberships: m.data || [] };
+  }
+
+  async function loadSites(siteIds){
+    const s = await sb.from("sites").select("id,code,name");
+    if (s.error) return siteIds.map(id => ({ id, code: id.slice(0,6), name: "場域" }));
+    const map = {};
+    for (const it of (s.data || [])) map[it.id] = it;
+    return siteIds.map(id => map[id] || { id, code: id.slice(0,6), name: "場域" });
+  }
+
+  function statusZh(s){
+    if (s==="pending") return "審核中";
+    if (s==="approved") return "已通過";
+    if (s==="rejected") return "未通過";
+    return s||"";
+  }
+
+  async function renderMy(siteId, meUid){
+    const box = $("my_box");
+    box.innerHTML = `<div class="small">讀取中…</div>`;
+    const q = await sb.from("leave_requests").select("*").eq("site_id", siteId).eq("requester_id", meUid).order("created_at", { ascending:false }).limit(50);
+    if (q.error){ box.innerHTML = `<div class="small">讀取失敗：${escapeHtml(q.error.message)}</div>`; return; }
+    const rows = q.data || [];
+    if (!rows.length){ box.innerHTML = `<div class="small">目前沒有申請</div>`; return; }
+    box.innerHTML = "";
+    for (const r of rows){
+      const dTo = r.date_to || r.date_from;
+      let imgHtml = "";
+      if (r.photo_path) {
+        const { data } = sb.storage.from('leave-photos').getPublicUrl(r.photo_path);
+        imgHtml = `<div style="margin-top:8px"><img src="${data.publicUrl}" style="max-width:80px;border-radius:4px;border:1px solid #ddd"></div>`;
+      }
+      const div = document.createElement("div");
+      div.className = "task";
+      div.innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">
+          <strong>${escapeHtml(r.leave_type)}｜${escapeHtml(r.date_from)}${dTo!==r.date_from?(" ~ "+escapeHtml(dTo)):""}</strong>
+          <span class="pill">${escapeHtml(statusZh(r.status))}</span>
+        </div>
+        <div class="small" style="margin-top:6px">${new Date(r.created_at).toLocaleString()}</div>
+        ${r.note ? `<div class="small" style="margin-top:8px;white-space:pre-wrap">${escapeHtml(r.note)}</div>` : ""}
+        ${imgHtml}
+      `;
+      box.appendChild(div);
+    }
+  }
+
+  (async () => {
+    const me = await loadMe();
+    if (!me) return;
+    $("me_line").textContent = `${me.username}${me.name ? " / "+me.name : ""}`;
+    const siteIds = (me.memberships || []).map(x=>x.site_id);
+    const sites = await loadSites(siteIds);
+    const sel = $("site_sel");
+    for (const s of sites){
+      const opt = document.createElement("option");
+      opt.value = s.id; opt.textContent = `${s.name || "場域"} (${s.code || s.id.slice(0,6)})`;
+      sel.appendChild(opt);
+    }
+    const qsSite = getQueryParam("site_id");
+    sel.value = (qsSite && sites.some(x=>x.id===qsSite)) ? qsSite : (sites[0]?.id || "");
+
+    const today = new Date();
+    const tz = today.getTimezoneOffset()*60000;
+    $("date_from").value = new Date(today.getTime()-tz).toISOString().slice(0,10);
+
+    $("btn_submit").onclick = async () => {
+      setMsg("");
+      const siteId = sel.value;
+      const photoFile = $("photo").files[0];
+      let photo_path = null;
+
+      if (!siteId || !$("date_from").value) { setMsg("請檢查必填欄位"); return; }
+
+      if (photoFile) {
+        setMsg("正在上傳照片...");
+        const fileName = `${me.uid}/${Date.now()}_${photoFile.name}`;
+        const { error: upErr } = await sb.storage.from('leave-photos').upload(fileName, photoFile);
+        if (upErr) { setMsg("上傳失敗：" + upErr.message); return; }
+        photo_path = fileName;
+      }
+
+      const { error } = await sb.from("leave_requests").insert({
+        site_id: siteId, requester_id: me.uid, leave_type: $("leave_type").value,
+        date_from: $("date_from").value, date_to: $("date_to").value || $("date_from").value,
+        note: $("note").value || null, photo_path
+      });
+
+      if (error) setMsg("送出失敗：" + error.message);
+      else { setMsg("已送出審核", true); $("note").value = ""; $("photo").value = ""; await renderMy(siteId, me.uid); }
+    };
+
+    sel.onchange = () => renderMy(sel.value, me.uid);
+    await renderMy(sel.value, me.uid);
+  })();
+</script>
+</body>
+</html>

@@ -137,6 +137,18 @@
         <button id="btn_mapping" style="width:auto;padding:6px 10px;display:none">人員對照</button>
         <button id="btn_import_page" style="width:auto;padding:6px 10px;display:none">匯入班表</button>
         <button id="btn_schedule_view" style="width:auto;padding:6px 10px;">查看班表</button>
+
+        <button id="btn_leave_apply" style="width:auto;padding:6px 10px;">申請休假</button>
+
+        <button id="btn_leave_review" style="width:auto;padding:6px 10px;display:none;position:relative">
+          審核請假
+          <span id="leave_badge" style="
+            display:none;
+            position:absolute;top:-3px;right:-3px;
+            width:10px;height:10px;border-radius:50%;
+            background:#d10000;
+          "></span>
+        </button>
       </div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -242,40 +254,19 @@
 
 
     // ====== 指派/人員名單輔助 ======
-    async function getSitePeople(siteId){
-      // 1) 先抓該場域所有 active membership 的 user_id
-      const m = await supabase
-        .from("site_memberships")
-        .select("user_id,role,is_active")
-        .eq("site_id", siteId)
-        .eq("is_active", true);
+        async function getSitePeople(siteId){
+      // ✅ 改用 RPC：由資料庫安全地回傳同場域名單（包含主管/工程師）
+      const r = await supabase.rpc("get_site_people", { p_site_id: siteId });
 
-      if (m.error){
-        return { error: m.error, people: [] };
+      if (r.error){
+        return { error: r.error, people: [] };
       }
 
-      const userIds = (m.data || []).map(x => x.user_id);
-      if (userIds.length === 0){
-        return { error: null, people: [] };
-      }
+      const people = (r.data || []).map(x => ({
+        user_id: x.user_id,
+        name: x.display_name || x.user_id
+      }));
 
-      // 2) 再用 user_id 去 profiles 找名字（避免依賴外鍵 join）
-      const p = await supabase
-        .from("profiles")
-        .select("user_id,username,display_name")
-        .in("user_id", userIds);
-
-      if (p.error){
-        // profiles 失敗時仍可用 user_id 顯示
-        const people = userIds.map(uid => ({ user_id: uid, name: uid }));
-        return { error: null, people };
-      }
-
-      const map = {};
-      for (const it of (p.data || [])){
-        map[it.user_id] = it.display_name || it.username || it.user_id;
-      }
-      const people = userIds.map(uid => ({ user_id: uid, name: map[uid] || uid }));
       return { error: null, people };
     }
 
@@ -614,6 +605,35 @@
     function isManagerRole(role){
       return role === "engineer" || role === "supervisor";
     }
+
+    // ====== 請假審核紅點（主管/工程師）======
+    async function refreshLeaveBadge(siteId, roleCur){
+      const reviewBtn = document.getElementById("btn_leave_review");
+      const badge = document.getElementById("leave_badge");
+      if (!reviewBtn || !badge) return;
+
+      const isMgr = isManagerRole(roleCur);
+      reviewBtn.style.display = isMgr ? "" : "none";
+
+      if (!isMgr){
+        badge.style.display = "none";
+        return;
+      }
+
+      const q = await supabase
+        .from("leave_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("site_id", siteId)
+        .eq("status", "pending");
+
+      if (q.error){
+        badge.style.display = "none";
+        return;
+      }
+
+      badge.style.display = (q.count || 0) > 0 ? "" : "none";
+    }
+    // =======================================
     function toISODateLocal(d){
       // 轉成本地日期字串 YYYY-MM-DD（避免時區造成日期跑掉）
       const tz = d.getTimezoneOffset() * 60000;
@@ -673,7 +693,7 @@
         div.className = "task";
         const shiftText = String(r.shift || "").trim();
 let cls = "";
-if (["休","休假","喪假","事假","病假"].includes(shiftText)){
+if (["休","休假","喪假","事假","病假","生理假"].includes(shiftText)){
   cls = "shift-red";
 }
 if (["特休","行政"].includes(shiftText)){
@@ -739,7 +759,7 @@ div.innerHTML = `
 
 // 下一次「休/喪假/事假/病假/特休」日期（在明日之後）
 const dayAfterTomorrow = toISODateLocal(new Date(Date.now() + 2*86400000));
-const specialKinds = ["休","休假","喪假","事假","病假","特休"];
+const specialKinds = ["休","休假","喪假","事假","病假","生理假","特休"];
 
 const nextQ = await supabase
   .from("site_schedules")
@@ -916,6 +936,9 @@ if (!nextQ.error){
       const titleEl = document.getElementById("page_title");
       if (titleEl) titleEl.textContent = `${roleLabel(roleNow)} - ${siteNameNow || "未命名場域"}`;
 
+      // 請假審核紅點（主管/工程師）
+      await refreshLeaveBadge(currentSiteId, roleNow);
+
 
       // 顯示「我的 今日/明日 班表」（依目前場域）
       await refreshMyScheduleLine(currentSiteId, me.uid);
@@ -947,7 +970,33 @@ if (viewBtn){
   };
 }
 
-      await loadAssignees(currentSiteId);
+      
+
+// 申請休假：所有人可用
+const leaveApplyBtn = document.getElementById("btn_leave_apply");
+if (leaveApplyBtn){
+  leaveApplyBtn.onclick = () => {
+    window.open(`./leave_apply.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
+  };
+}
+
+// 審核請假：主管/工程師
+const leaveReviewBtn = document.getElementById("btn_leave_review");
+if (leaveReviewBtn){
+  leaveReviewBtn.onclick = () => {
+    window.open(`./leave_review.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
+  };
+}
+
+// 每 30 秒刷新一次紅點（避免主管錯過新申請）
+setInterval(async () => {
+  try{
+    const siteId = sel.value;
+    const roleCur = (me.memberships.find(x => x.site_id === siteId)?.role) || "";
+    await refreshLeaveBadge(siteId, roleCur);
+  }catch(e){}
+}, 30000);
+await loadAssignees(currentSiteId);
 
       await refreshTasks(currentSiteId, me.uid);
       await refreshMyTasksPanel(currentSiteId, me.uid);
@@ -962,6 +1011,8 @@ if (viewBtn){
         const siteNameCur = siteList.find(s => s.id === sel.value)?.name || "";
         const titleEl = document.getElementById("page_title");
         if (titleEl) titleEl.textContent = `${roleLabel(roleCur)} - ${siteNameCur || "未命名場域"}`;
+
+        await refreshLeaveBadge(sel.value, roleCur);
 
         const mapBtn = document.getElementById("btn_mapping");
         if (mapBtn) mapBtn.style.display = isManagerRole(roleCur) ? "" : "none";
