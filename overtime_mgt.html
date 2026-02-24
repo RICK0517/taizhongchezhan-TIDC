@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>加班管理</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial;max-width:980px;margin:28px auto;padding:0 14px;background:#f5f7f9}
+    .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+    .card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 2px 5px rgba(0,0,0,0.03)}
+    
+    /* 表單元件樣式 */
+    label{display:block;margin-bottom:6px;font-size:13px;font-weight:600;color:#555}
+    input,select,textarea,button{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box}
+    input:focus,select:focus,textarea:focus{border-color:#2196f3;outline:none}
+    
+    .grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px}
+    
+    button{background:#2563eb;color:#fff;font-weight:700;cursor:pointer;border:none;transition:opacity 0.2s}
+    button:hover{opacity:0.9}
+    button.secondary{background:#64748b}
+    
+    /* 列表樣式 */
+    .record-item{border-bottom:1px solid #eee;padding:12px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
+    .record-item:last-child{border-bottom:none}
+    .tag{padding:2px 8px;border-radius:12px;font-size:12px;background:#eee;color:#333;margin-right:6px}
+    .tag-blue{background:#e3f2fd;color:#1565c0}
+    .tag-orange{background:#fff3e0;color:#ef6c00}
+    
+    .msg{margin-top:10px;padding:10px;border-radius:6px;display:none}
+    .msg.ok{background:#dcfce7;color:#15803d;display:block}
+    .msg.err{background:#fee2e2;color:#b91c1c;display:block}
+  </style>
+</head>
+<body>
+
+  <div class="bar">
+    <div>
+      <h1 style="margin:0">加班管理</h1>
+      <div id="site_info" style="font-size:13px;color:#666;margin-top:4px">讀取中...</div>
+    </div>
+    <div style="display:flex;gap:10px">
+        <select id="site_sel" style="min-width:200px"></select>
+        <button class="secondary" onclick="location.href='./app.html'" style="width:auto">回主控台</button>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2 style="margin-top:0;border-left:4px solid #2563eb;padding-left:10px">新增加班紀錄</h2>
+    
+    <div class="grid">
+        <div>
+            <label>1. 加班原因</label>
+            <select id="reason_cat" onchange="toggleOtherInput()">
+                <option value="施工">🚧 施工</option>
+                <option value="代班">👥 代班</option>
+                <option value="其他">✏️ 其他 (請輸入)</option>
+            </select>
+            <input id="reason_detail" placeholder="請輸入原因..." style="margin-top:6px;display:none;">
+        </div>
+
+        <div>
+            <label>2. 加班別</label>
+            <select id="ot_type">
+                <option value="休假日加班">🏖️ 休假日加班</option>
+                <option value="平日早出">☀️ 平日早出</option>
+                <option value="平日延後">🌙 平日延後</option>
+            </select>
+        </div>
+
+        <div>
+            <label>3. 加班人員</label>
+            <select id="target_user">
+                <option value="">載入中...</option>
+            </select>
+        </div>
+
+        <div>
+            <label>4. 加班日期</label>
+            <input type="date" id="work_date">
+        </div>
+
+        <div>
+            <label>5. 時數 (小時)</label>
+            <input type="number" id="hours" step="0.5" placeholder="例如: 2.0">
+        </div>
+    </div>
+
+    <div style="margin-top:16px">
+        <label>6. 備註 (選填)</label>
+        <textarea id="note" rows="2" placeholder="補充說明..."></textarea>
+    </div>
+
+    <button id="btn_submit" style="margin-top:16px">送出紀錄</button>
+    <div id="msg" class="msg"></div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-top:0">近期紀錄 (最近 20 筆)</h2>
+    <div id="list_box">
+        <div style="color:#888;font-size:13px">載入中...</div>
+    </div>
+  </section>
+
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+    const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    const $ = id => document.getElementById(id);
+    let myUid = "";
+
+    // 切換「其他」輸入框顯示
+    window.toggleOtherInput = function() {
+        const val = $("reason_cat").value;
+        $("reason_detail").style.display = (val === "其他") ? "block" : "none";
+    }
+
+    async function init() {
+        // 1. 驗證登入
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) { location.href = "./index.html"; return; }
+        myUid = session.user.id;
+        
+        // 2. 載入場域列表
+        const { data: members } = await supabase.from("site_memberships")
+            .select("site_id, role")
+            .eq("user_id", myUid)
+            .eq("is_active", true);
+            
+        if (!members || members.length === 0) {
+            alert("無場域權限"); return;
+        }
+
+        const siteIds = members.map(m => m.site_id);
+        const { data: sites } = await supabase.from("sites").select("id, name").in("id", siteIds);
+        
+        const sel = $("site_sel");
+        sites.forEach(s => {
+            const opt = document.createElement("option");
+            opt.value = s.id;
+            opt.textContent = s.name;
+            sel.appendChild(opt);
+        });
+
+        // 預設日期為今天
+        $("work_date").value = new Date().toISOString().slice(0, 10);
+
+        // 監聽場域變更
+        sel.onchange = () => loadSiteData(sel.value);
+        if (sites.length > 0) loadSiteData(sites[0].id);
+
+        // 送出按鈕
+        $("btn_submit").onclick = submitForm;
+    }
+
+    async function loadSiteData(siteId) {
+        // 顯示身分
+        const mem = await supabase.from("site_memberships").select("role").eq("user_id", myUid).eq("site_id", siteId).maybeSingle();
+        $("site_info").textContent = `您的身分：${roleLabel(mem.data?.role)}`;
+
+        // A. 載入該場域人員清單
+        const userSel = $("target_user");
+        userSel.innerHTML = "<option>載入中...</option>";
+        
+        // 使用既有的 RPC (如果沒有這個 RPC，需改用一般查詢)
+        const { data: people } = await supabase.rpc("get_site_people", { p_site_id: siteId });
+        
+        userSel.innerHTML = "";
+        if (people) {
+            people.forEach(p => {
+                const opt = document.createElement("option");
+                opt.value = p.user_id;
+                opt.textContent = p.display_name || p.username;
+                userSel.appendChild(opt);
+            });
+        }
+
+        // B. 載入歷史紀錄
+        loadHistory(siteId);
+    }
+
+    async function submitForm() {
+        const msg = $("msg");
+        msg.className = "msg"; 
+        
+        const siteId = $("site_sel").value;
+        const reasonCat = $("reason_cat").value;
+        const reasonDetail = $("reason_detail").value;
+        const otType = $("ot_type").value;
+        const targetUser = $("target_user").value;
+        const workDate = $("work_date").value;
+        const hours = $("hours").value;
+        const note = $("note").value;
+
+        // 驗證
+        if (!targetUser) return showMsg("請選擇加班人員", false);
+        if (!workDate) return showMsg("請選擇日期", false);
+        if (!hours || parseFloat(hours) <= 0) return showMsg("請輸入有效的時數", false);
+        if (reasonCat === "其他" && !reasonDetail) return showMsg("請輸入其他原因說明", false);
+
+        $("btn_submit").textContent = "處理中...";
+        $("btn_submit").disabled = true;
+
+        const { error } = await supabase.from("overtime_records").insert({
+            site_id: siteId,
+            user_id: targetUser,
+            overtime_type: otType,
+            reason_category: reasonCat,
+            reason_detail: (reasonCat === "其他") ? reasonDetail : null,
+            work_date: workDate,
+            hours: hours,
+            note: note,
+            created_by: myUid
+        });
+
+        $("btn_submit").textContent = "送出紀錄";
+        $("btn_submit").disabled = false;
+
+        if (error) {
+            showMsg("失敗：" + error.message, false);
+        } else {
+            showMsg("新增成功！", true);
+            // 清空部分欄位
+            $("hours").value = "";
+            $("note").value = "";
+            loadHistory(siteId);
+        }
+    }
+
+    async function loadHistory(siteId) {
+        const box = $("list_box");
+        box.innerHTML = `<div style="color:#888;font-size:13px">更新中...</div>`;
+
+        const { data, error } = await supabase.from("overtime_records")
+            .select(`
+                *,
+                profiles:user_id ( display_name, username )
+            `)
+            .eq("site_id", siteId)
+            .order("created_at", { ascending: false })
+            .limit(20);
+
+        if (error) {
+            box.innerHTML = `<div style="color:red">讀取失敗</div>`;
+            return;
+        }
+
+        if (data.length === 0) {
+            box.innerHTML = `<div style="color:#888;padding:10px">尚無紀錄</div>`;
+            return;
+        }
+
+        box.innerHTML = "";
+        data.forEach(r => {
+            const name = r.profiles?.display_name || r.profiles?.username || "未知人員";
+            const reason = r.reason_category === "其他" ? `其他 (${r.reason_detail})` : r.reason_category;
+            
+            const div = document.createElement("div");
+            div.className = "record-item";
+            div.innerHTML = `
+                <div style="flex:1">
+                    <div style="font-weight:bold;font-size:15px;margin-bottom:4px">
+                        ${name} <span style="font-weight:normal;color:#666">加班 ${r.hours} 小時</span>
+                    </div>
+                    <div style="font-size:13px;color:#555">
+                        <span class="tag tag-blue">${r.overtime_type}</span>
+                        <span class="tag tag-orange">${reason}</span>
+                        📅 ${r.work_date}
+                    </div>
+                    ${r.note ? `<div style="font-size:12px;color:#888;margin-top:4px">備註: ${escapeHtml(r.note)}</div>` : ""}
+                </div>
+                <div>
+                     <button class="secondary" style="padding:4px 8px;font-size:12px;background:#ef5350" onclick="window.delRec('${r.id}')">刪除</button>
+                </div>
+            `;
+            box.appendChild(div);
+        });
+    }
+
+    // 刪除功能 (掛載到 window 以便 HTML onclick 呼叫)
+    window.delRec = async function(id) {
+        if(!confirm("確定要刪除此筆加班紀錄？")) return;
+        const { error } = await supabase.from("overtime_records").delete().eq("id", id);
+        if(error) alert("刪除失敗:" + error.message);
+        else loadHistory($("site_sel").value);
+    }
+
+    function showMsg(text, isOk) {
+        const el = $("msg");
+        el.textContent = text;
+        el.className = isOk ? "msg ok" : "msg err";
+        setTimeout(() => { if(isOk) el.style.display="none"; }, 3000);
+    }
+
+    function escapeHtml(text) {
+        return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "";
+    }
+    
+    function roleLabel(r){ 
+        if(r==='engineer') return '工程師';
+        if(r==='supervisor') return '主管';
+        return '員工'; 
+    }
+
+    init();
+  </script>
+</body>
+</html>
