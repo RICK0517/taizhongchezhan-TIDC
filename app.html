@@ -1,274 +1,1092 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-  
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>主控台</title>
   <style>
-      /* ===== 今日班表縮小版 ===== */
-  #today_card {
-    height:700px;
-    max-height:none;
-    overflow:hidden;
-    width: 10%;
-    min-width: 50px;
-    max-height: none;
-    overflow: visible;
-    font-size: 0.45rem;
-    line-height: 1;
-    padding: 5px;
-  }
+    /* ===== 基礎重置與變數 ===== */
+    :root {
+      --sidebar-width: 180px; 
+      --header-height: 50px;
+      --primary-color: #2196f3;
+      --bg-color: #f4f6f8;
+    }
+    body { 
+      font-family: system-ui, "Segoe UI", Arial, sans-serif; 
+      margin: 0; padding: 0; 
+      background: var(--bg-color); 
+      color: #333;
+      display: flex;
+      height: 100vh; /* 固定高度，讓內部滾動 */
+      overflow: hidden; /* 防止整頁滾動 */
+    }
+    *, *::before, *::after { box-sizing: border-box; }
 
-  #today_card h2 {
-    font-size: 0.9rem;
-    margin-bottom: 4px;
-  }
-
-  #today_card .task {
-    padding: 3px 4px;
-    border-radius: 6px;
-  }
-
-  #today_card strong {
-    font-weight: 400;
-    font-size: 0.8rem;
-  }
-
-  #today_card .small {
-    font-size: 0.7rem;
-  }
-    body{font-family:system-ui,Segoe UI,Arial;max-width:980px;margin:28px auto;padding:0 14px}
-    .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-    .card{border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px}
-    input,select,textarea,button{width:100%;padding:10px;margin-top:6px}
-    textarea{min-height:90px}
-    button{font-weight:700;cursor:pointer}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    @media (max-width:900px){.grid{grid-template-columns:1fr}}
-    .small{opacity:.75;font-size:13px;line-height:1.4}
-    .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
-    .task{border:1px solid #e2e2e2;border-radius:10px;padding:12px}
-    .doneby{margin-top:8px;color:#b00020;font-weight:700;white-space:pre-wrap}
-    #my_shift_line{font-size:12px;opacity:.85;line-height:1.2}
-    #btn_mapping{font-size:12px}
-    #btn_import_page{font-size:12px}
-    #btn_schedule_view{font-size:12px}
-    /* ===== 頂部個人班表強化樣式 ===== */
-
-    #my_shift_line {
-      display:flex;
-      align-items:center;
-      gap:8px;
-      font-size:14px;        /* 整體放大 */
-      font-weight:600;
+    /* ===== 左側側邊欄樣式 ===== */
+    .sidebar {
+      width: var(--sidebar-width);
+      background: #fff;
+      border-right: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0; /* 防止縮小 */
+      z-index: 100;
+      padding: 10px;
+      overflow-y: auto;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.02);
+      font-size: 0.9rem;
     }
 
-    .shift-label {
-      color:#666;
-      font-weight:500;
+    .brand {
+      font-size: 1.1rem;
+      font-weight: 800; color: #1565c0;
+      margin-bottom: 15px; padding-left: 5px; 
+      display: flex; align-items: center;
+      cursor: pointer;
     }
-
-    .shift-today {
-      background:#e3f2fd;
-      color:#0d47a1;
-      padding:4px 10px;
-      border-radius:16px;
-      font-size:15px;        /* 今日更大 */
-    }
-
     
-.shift-next {
-  background:#fff3e0;
-  color:#7a4b00;
-  padding:4px 10px;
-  border-radius:16px;
-  font-size:15px;
-}
-
-.shift-tomorrow {
-
-      background:#f3e5f5;
-      color:#4a148c;
-      padding:4px 10px;
-      border-radius:16px;
-      font-size:15px;
+    /* 用戶資訊區塊 */
+    .user-profile {
+      background: #f5f9ff; border-radius: 6px; padding: 8px;
+      margin-bottom: 15px; border: 1px solid #e3f2fd;
     }
-    /* 讓 100% 寬度包含 padding / border，避免溢出卡片 */
-*, *::before, *::after { box-sizing: border-box; }
+    .user-name { font-weight: bold; font-size: 0.85rem; color: #1565c0; }
+    .user-role { font-size: 0.75rem; color: #666; margin-top: 2px; }
+    .shift-text { font-size: 0.75rem; line-height: 1.3; margin-top: 4px; }
 
-      /* 保險：表單元件確保不會因為長字或瀏覽器樣式撐爆 */
-      input, select, textarea, button {
-        max-width: 100%;
-      }
-
-  
-    /* ===== 我的任務（右側） ===== */
-    #mytasks_card .task {
-      padding: 8px;
-      border-radius: 8px;
+    /* 堆疊選單 */
+    .nav-category { margin-bottom: 8px; border-bottom: 1px solid #f0f0f0; }
+    .nav-header {
+      width: 100%; text-align: left; background: none; border: none;
+      padding: 8px 5px; font-weight: 700; color: #555; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+      border-radius: 4px; transition: background 0.2s; font-size: 0.85rem;
+      position: relative;
     }
-    #mytasks_card strong { font-size: 0.95rem; font-weight: 650; }
-    #mytasks_card .small { font-size: 12px; line-height: 1.25; }
+    .nav-header:hover { background: #f8f8f8; color: #000; }
+    .nav-arrow { font-size: 0.6em; transition: transform 0.3s; opacity: 0.5; }
+    .nav-category.active .nav-arrow { transform: rotate(180deg); }
+    .nav-items { display: none; flex-direction: column; gap: 2px; padding-left: 8px; margin-bottom: 8px; }
+    .nav-category.active .nav-items { display: flex; }
 
-  
-/* ===== 班別顏色規則（主控台） ===== */
-.shift-red{
-  color:#d10000;
-  font-weight:700;
-}
-.shift-orange{
-  color:#e67e00;
-  font-weight:700;
-}
-</style>
+    /* 側邊欄按鈕 */
+    .nav-btn {
+      text-align: left; background: transparent; border: none;
+      padding: 6px 8px; font-size: 0.8rem; color: #666;
+      cursor: pointer; border-radius: 4px; position: relative;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover { background: #e3f2fd; color: #1565c0; }
+    .nav-btn.current { background: #e3f2fd; color: #1565c0; font-weight: bold; }
+    
+    .sidebar-footer { margin-top: auto; padding-top: 15px; border-top: 1px solid #eee; }
+    .btn-logout { width: 100%; padding: 6px; background: #607d8b; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+    select.site-select { width: 100%; margin-bottom: 8px; padding: 4px; font-size: 0.8rem; }
+    
+    .badge-dot { display: inline-block; width: 6px; height: 6px; background-color: #d32f2f; border-radius: 50%; position: absolute; right: 5px; top: 50%; transform: translateY(-50%); }
+    .group-badge-dot { display: inline-block; width: 8px; height: 8px; background-color: #d32f2f; border-radius: 50%; margin-right: 6px; }
 
+    /* ===== 右側主要內容區 ===== */
+    .main-wrapper {
+      flex: 1; width: 100%;
+      height: 100vh;
+      overflow-y: auto; /* 讓內容區自己滾動 */
+      position: relative;
+      background: var(--bg-color);
+    }
+    
+    /* 儀表板視圖 (預設顯示) */
+    #dashboard_view, #tools_view {
+      padding: 20px 30px;
+      max-width: 1200px; /* 限制最大寬度比較好看 */
+      margin: 0 auto;
+    }
+    
+    #tools_view { display: none; } /* 預設隱藏工具區 */
+
+    /* Iframe 視圖 (預設隱藏) */
+    #main_frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: none;
+      background: #fff;
+    }
+
+    /* 卡片與元件樣式 */
+    .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
+    h2 { font-size: 1.1rem; color: #333; margin-bottom: 12px; border-left: 4px solid var(--primary-color); padding-left: 8px; }
+    
+    input, select, textarea, button.action-btn { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    button.action-btn { background: #2196f3; color: white; font-weight: bold; border: none; cursor: pointer; transition: opacity 0.2s; }
+    button.action-btn:hover { opacity: 0.9; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    
+    .small { font-size: 12px; color: #666; }
+    .msg { margin-top: 8px; white-space: pre-wrap; color: #b00020; font-size: 0.85rem; }
+    .task { background: #fafafa; border: 1px solid #eee; border-radius: 6px; padding: 10px; transition: transform 0.2s; }
+    .task:hover { transform: translateY(-2px); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+
+    /* RWD */
+    @media (max-width: 768px) {
+      body { flex-direction: column; height: auto; overflow: auto; }
+      .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid #ddd; padding: 10px; }
+      .main-wrapper { height: auto; overflow: visible; }
+      #main_frame { height: 800px; /* 手機版給一個固定高度 */ }
+      .nav-items { display: none; }
+      .nav-category.active .nav-items { display: flex; }
+    }
+
+    /* 其他樣式 (標籤等) */
+    #today_card { height: auto; min-height: 400px; max-height: 700px; overflow-y: auto; }
+    .shift-red{ color:#d10000; font-weight:700; }
+    .shift-orange{ color:#e67e00; font-weight:700; }
+    .tag-event { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 4px; }
+    .tag-construction { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+    .tag-maintenance { background: #fff3e0; color: #ef6c00; border: 1px solid #ffe0b2; }
+    .tag-major { background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
+    .tag-other { background: #f5f5f5; color: #616161; border: 1px solid #e0e0e0; }
+    .days-left { float: right; font-weight: bold; color: #00695c; font-size: 0.85rem; }
+    .days-urgent { color: #d32f2f; }
+    .btn-group-right { float: right; display: flex; gap: 4px; margin-left: 8px; }
+    .btn-icon { border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 12px; color: #fff; }
+    .btn-edit { background-color: #1976d2; } 
+    .btn-history { background-color: #607d8b; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+
+    /* Modal */
+    dialog { border: none; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 95%; max-width: 800px; padding: 15px; background: #fff; }
+    dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; }
+    .modal-close { background: transparent; border: none; font-size: 18px; cursor: pointer; color: #666; }
+    .cal-controls { display: flex; justify-content: center; gap: 15px; margin-bottom: 10px; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); border: 1px solid #ddd; }
+    .cal-head { background: #f5f5f5; padding: 6px; text-align: center; font-weight: bold; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; font-size: 0.8rem; }
+    .cal-day { min-height: 80px; padding: 2px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; background: #fff; }
+    .cal-event-bar { font-size: 10px; padding: 1px 3px; margin-bottom: 1px; border-radius: 2px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid rgba(0,0,0,0.1); }
+    .ce-construction { background: #ffebee; color: #c62828; border-color: #ffcdd2; }
+    .ce-maintenance { background: #fff3e0; color: #ef6c00; border-color: #ffe0b2; }
+    .ce-major { background: #e3f2fd; color: #1565c0; border-color: #bbdefb; }
+    .ce-other { background: #f5f5f5; color: #616161; border-color: #e0e0e0; }
+    
+    /* ===== 計算機與工具樣式 ===== */
+    .tool-tabs { display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid #ddd; }
+    .tool-tab-btn { background: none; border: none; border-bottom: 3px solid transparent; padding: 8px 16px; font-weight: bold; color: #666; cursor: pointer; font-size: 1rem; }
+    .tool-tab-btn.active { border-bottom-color: #2196f3; color: #2196f3; }
+    
+    /* 計算機 */
+    .calc-container { width: 100%; max-width: 320px; margin: 0 auto; background: #333; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+    .calc-display { width: 100%; height: 60px; background: #444; color: white; text-align: right; font-size: 2rem; padding: 10px; border-radius: 6px; margin-bottom: 10px; border: none; outline: none; }
+    .calc-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .calc-btn { width: 100%; padding: 15px 0; font-size: 1.2rem; border-radius: 8px; border: none; cursor: pointer; background: #555; color: white; transition: background 0.1s; }
+    .calc-btn:active { background: #777; }
+    .calc-btn.op { background: #f39c12; color: white; }
+    .calc-btn.eq { background: #2196f3; color: white; grid-column: span 2; }
+    .calc-btn.clr { background: #d32f2f; }
+
+    /* 費用試算 */
+    .fee-form { max-width: 600px; margin: 0 auto; }
+    .fee-group { margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
+    .fee-label { display: block; font-weight: bold; margin-bottom: 4px; color: #555; }
+    .fee-result-box { margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 1px solid #bbdefb; text-align: center; }
+    .fee-total { font-size: 1.8rem; font-weight: bold; color: #1565c0; margin: 5px 0; }
+    .switch-mode-btn { margin-right: 10px; padding: 6px 12px; background: #eee; border: 1px solid #ddd; border-radius: 20px; cursor: pointer; }
+    .switch-mode-btn.active { background: #2196f3; color: white; border-color: #2196f3; }
+  </style>
 </head>
 <body>
-  <div class="bar">
-    <div>
-      <h1 id="page_title" style="margin:0">讀取中…</h1>
-      <div class="small" id="me_line">讀取中…</div>
 
-      <div class="small" id="dbg" style="margin-top:6px"></div>
+  <nav class="sidebar">
+    <div class="brand" onclick="showDashboard()">📅 排班系統</div>
+    
+    <div class="user-profile">
+      <div id="me_name" class="user-name">讀取中...</div>
+      <div id="me_role" class="user-role"></div>
+      <div id="my_shift_text" class="shift-text"></div>
+    </div>
 
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px">
-        <div class="small" id="my_shift_line">班表：讀取中…</div>
-        <button id="btn_mapping" style="width:auto;padding:6px 10px;display:none">人員對照</button>
-        <button id="btn_import_page" style="width:auto;padding:6px 10px;display:none">匯入班表</button>
-        <button id="btn_schedule_view" style="width:auto;padding:6px 10px;">查看班表</button>
+    <div class="nav-category active" onclick="toggleNav(this)">
+        <button class="nav-header">一般功能<span class="nav-arrow">▼</span></button>
+        <div class="nav-items" onclick="event.stopPropagation()">
+            <button class="nav-btn current" id="btn_home" onclick="showDashboard()">🏠 主控台</button>
+        </div>
+    </div>
 
-        <button id="btn_stats" style="width:auto;padding:6px 10px;">假別統計</button>
-        <button id="btn_leave_apply" style="width:auto;padding:6px 10px;">申請休假</button>
+    <div class="nav-category active" onclick="toggleNav(this)">
+      <button class="nav-header">小工具<span class="nav-arrow">▼</span></button>
+      <div class="nav-items" onclick="event.stopPropagation()">
+        <button class="nav-btn" onclick="showTool('calc', this)">🧮 計算機</button>
+        <button class="nav-btn" onclick="showTool('fee', this)">💰 金額試算</button>
+      </div>
+    </div>
 
-        <button id="btn_leave_review" style="width:auto;padding:6px 10px;display:none;position:relative">
-          審核請假
-        <button onclick="window.open(`./staff_info.html?site_id=${document.getElementById('site_sel').value}`, '_self')" style="width:auto;padding:6px 10px;">人事資料</button>
-          <span id="leave_badge" style="
-            display:none;
-            position:absolute;top:-3px;right:-3px;
-            width:10px;height:10px;border-radius:50%;
-            background:#d10000;
-          "></span>
+    <div class="nav-category" onclick="toggleNav(this)">
+      <button class="nav-header">
+        個人資料
+        <span class="nav-arrow">▼</span>
+      </button>
+      <div class="nav-items" onclick="event.stopPropagation()">
+        <button class="nav-btn" onclick="loadPage('./schedule_view.html')">📅 查看班表</button>
+        <button class="nav-btn" onclick="loadPage('./stats.html')">📊 假別統計</button>
+        <button class="nav-btn" onclick="loadPage('./staff_info.html')">👤 人事資料</button>
+      </div>
+    </div>
+
+    <div class="nav-category" onclick="toggleNav(this)">
+      <button class="nav-header">
+        休假申請
+        <span class="nav-arrow">▼</span>
+      </button>
+      <div class="nav-items" onclick="event.stopPropagation()">
+        <button class="nav-btn" onclick="loadPage('./leave_apply.html')">📝 申請休假</button>
+      </div>
+    </div>
+
+    <div class="nav-category" id="group_manager" style="display:none;" onclick="toggleNav(this)">
+      <button class="nav-header">
+        主管管理
+        <div style="display:flex; align-items:center;">
+          <span id="group_badge" class="group-badge-dot" style="display:none;"></span>
+          <span class="nav-arrow">▼</span>
+        </div>
+      </button>
+      <div class="nav-items" onclick="event.stopPropagation()">
+        <button class="nav-btn" onclick="loadPage('./mapping.html')">👥 人員對照</button>
+        <button class="nav-btn" onclick="loadPage('./schedule_import.html')">📥 匯入班表</button>
+        <button id="btn_leave_review" class="nav-btn" onclick="loadPage('./leave_review.html')">
+          ✅ 審核請假
+          <span id="leave_badge" class="badge-dot" style="display:none;"></span>
         </button>
       </div>
     </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <select id="site_sel" style="min-width:180px"></select>
-      <button id="btn_logout" style="width:auto;padding:10px 14px">登出</button>
+
+    <div class="sidebar-footer">
+      <label class="small" style="display:block; margin-bottom:2px;">切換場域</label>
+      <select id="site_sel" class="site-select"></select>
+      <button id="btn_logout" class="btn-logout">登出</button>
+      <div id="dbg" class="small" style="margin-top:6px; word-break:break-all; font-size:10px;"></div>
     </div>
-  </div>
+  </nav>
 
-  <!-- 今日班表（自動依目前場域顯示） -->
-   <div style="display:flex;gap:16px;align-items:flex-start">
-  <section class="card" id="today_card" style="
-    width:15%;
-   max-height:50vh;
-    overflow:auto;
-    font-size:0.85em;
-    ">
-    <h2 style="margin:0">今天班表</h2>
-    <div class="small" id="today_date_line" style="margin-top:6px"></div>
-    <div id="today_box" style="margin-top:10px;display:grid;gap:8px"></div>
-    <div id="today_msg" class="small" style="margin-top:10px"></div>
-  </section>
-
-  <!-- 我的任務（最近 5 筆：我建立或被指派） -->
-  <section class="card" id="mytasks_card" style="flex:1">
-    <h2 style="margin:0">我的任務（最近 5 筆）</h2>
-    <div id="mytasks_box" style="margin-top:10px;display:grid;gap:8px"></div>
-    <div id="mytasks_msg" class="small" style="margin-top:10px"></div>
-  </section>
-
-</div>
-
-  <!-- 匯入班表（僅工程師/主管可見） -->
-  <section class="card" id="import_card" style="display:none">
-    <h2 style="margin:0">匯入班表</h2>
-    <div class="small" style="margin-top:8px;line-height:1.5">
-      已搬到獨立頁面，避免主控台太擠。
-    </div>
-    <button id="btn_open_import" style="width:auto;padding:10px 14px;margin-top:10px">開啟匯入班表頁</button>
-    <div id="import_msg" class="msg"></div>
-</section>
-
-  <section class="card" style="flex:1">
-    <h2 style="margin:0">新增任務</h2>
-    <div class="grid" style="margin-top:10px">
-      <div>
-        <label>標題
-          <input id="task_title" placeholder="例如：巡檢清單更新" />
-        </label>
-      </div>
-      <div>
-        <label>狀態
-          <select id="task_status">
-            <option value="open" selected>open</option>
-            <option value="doing">doing</option>
-            <option value="done">done</option>
-          </select>
-        </label>
-      </div>
+  <main class="main-wrapper">
     
+    <iframe id="main_frame" src=""></iframe>
 
+    <div id="tools_view">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h1 id="tool_page_title" style="margin:0; font-size:1.4rem;">小工具</h1>
+        </div>
 
-      <div>
-        <label>指派給（同場域，可複選）
-          <select id="task_assignees" multiple size="6"></select>
-        </label>
-      </div>
-</div>
-    <label>內容
-      <textarea id="task_body" placeholder="可空"></textarea>
-    </label>
-    <button id="btn_create">建立</button>
-    <div id="create_msg" class="msg"></div>
-    <div class="small" style="margin-top:10px">
-      權限靠 RLS：沒有 membership 的場域看不到也寫不了；跨場域靠多筆 membership。
+        <section id="tool_ui_calc" class="card" style="display:none;">
+            <h2 style="text-align:center; border:none;">簡易計算機</h2>
+            <div class="calc-container">
+                <input type="text" id="calc_display" class="calc-display" readonly value="0">
+                <div class="calc-keys">
+                    <button class="calc-btn clr" onclick="calcClear()">C</button>
+                    <button class="calc-btn op" onclick="calcAppend('/')">÷</button>
+                    <button class="calc-btn op" onclick="calcAppend('*')">×</button>
+                    <button class="calc-btn op" onclick="calcDel()">←</button>
+                    
+                    <button class="calc-btn" onclick="calcAppend('7')">7</button>
+                    <button class="calc-btn" onclick="calcAppend('8')">8</button>
+                    <button class="calc-btn" onclick="calcAppend('9')">9</button>
+                    <button class="calc-btn op" onclick="calcAppend('-')">-</button>
+                    
+                    <button class="calc-btn" onclick="calcAppend('4')">4</button>
+                    <button class="calc-btn" onclick="calcAppend('5')">5</button>
+                    <button class="calc-btn" onclick="calcAppend('6')">6</button>
+                    <button class="calc-btn op" onclick="calcAppend('+')">+</button>
+                    
+                    <button class="calc-btn" onclick="calcAppend('1')">1</button>
+                    <button class="calc-btn" onclick="calcAppend('2')">2</button>
+                    <button class="calc-btn" onclick="calcAppend('3')">3</button>
+                    <button class="calc-btn eq" onclick="calcResult()">=</button>
+                    
+                    <button class="calc-btn" style="grid-column: span 2;" onclick="calcAppend('0')">0</button>
+                    <button class="calc-btn" onclick="calcAppend('.')">.</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="tool_ui_fee" class="card" style="display:none;">
+            <h2 style="border:none;">金額計算</h2>
+            <div style="margin-bottom:15px; display:flex; gap:10px;">
+                <button id="mode_btn_count" class="switch-mode-btn active" onclick="switchFeeMode('count')">1. 計次模式</button>
+                <button id="mode_btn_time" class="switch-mode-btn" onclick="switchFeeMode('time')">2. 計時模式</button>
+            </div>
+
+            <div class="fee-form">
+                <div id="fee_input_group_count">
+                    <div class="fee-group">
+                        <span class="fee-label">📅 日期區間 (計次)</span>
+                        <div class="grid">
+                             <label class="small">開始日期 <input type="date" id="fee_date_start"></label>
+                             <label class="small">結束日期 <input type="date" id="fee_date_end"></label>
+                        </div>
+                        <div class="small" style="margin-top:6px; color:#666;">系統將自動判斷區間內的國定假日(依據2025-2026法規)與週末。</div>
+                    </div>
+                </div>
+
+                <div id="fee_input_group_time" style="display:none;">
+                    <div class="fee-group">
+                        <span class="fee-label">⏰ 精準區間 (計時)</span>
+                        <div class="grid">
+                             <label class="small">開始時間 <input type="datetime-local" id="fee_datetime_start"></label>
+                             <label class="small">結束時間 <input type="datetime-local" id="fee_datetime_end"></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="fee_setting_count">
+                    <div class="fee-group">
+                        <span class="fee-label">💰 費率設定 (計次)</span>
+                        <div class="grid">
+                            <label class="small">平日費用 <input type="number" id="fee_count_normal" value="30"></label>
+                            <label class="small">假日費用 <input type="number" id="fee_count_holiday" value="50"></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="fee_setting_time" style="display:none;">
+                    <div class="fee-group">
+                        <span class="fee-label">💰 費率設定 (計時)</span>
+                        <div class="grid">
+                            <label class="small">時間單位(分鐘) <input type="number" id="fee_time_unit" value="30"></label>
+                            <label class="small">單位費用(平日) <input type="number" id="fee_time_rate_normal" value="30"></label>
+                            <label class="small">單位費用(假日) <input type="number" id="fee_time_rate_holiday" value="50"></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fee-group">
+                    <span class="fee-label">⚙️ 進階規則</span>
+                    <label style="cursor:pointer; display:block; margin-bottom:4px;">
+                        <input type="radio" name="holiday_rule" value="weekend" checked style="width:auto;"> 國定假日視同「假日」
+                    </label>
+                    <label style="cursor:pointer; display:block; margin-bottom:8px;">
+                        <input type="radio" name="holiday_rule" value="weekday" style="width:auto;"> 國定假日視同「平日」
+                    </label>
+                    <div style="border-top:1px solid #ddd; margin-top:8px; padding-top:8px;">
+                        <label class="small" style="display:flex; align-items:center; gap:6px; color:#d32f2f;">
+                            <input type="checkbox" id="fee_manual_holiday" style="width:auto;"> 
+                            (手動) 強制視為假日
+                        </label>
+                    </div>
+                    
+                    <div style="border-top:1px solid #ddd; margin-top:8px; padding-top:8px;">
+                        <label class="small" style="display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="fee_has_cap" style="width:auto;" onchange="toggleCapInput()"> 啟用金額上限
+                        </label>
+                        <input type="number" id="fee_cap_amount" placeholder="輸入上限金額" disabled style="display:none;">
+                    </div>
+                </div>
+
+                <button class="action-btn" onclick="calculateFee()">開始計算</button>
+
+                <div class="fee-result-box" id="fee_result_area" style="display:none;">
+                    <div class="small">計算結果</div>
+                    <div id="fee_final_amount" class="fee-total">$0</div>
+                    <div id="fee_detail_msg" class="small" style="color:#666; white-space: pre-line;"></div>
+                </div>
+            </div>
+        </section>
     </div>
-  </section>
 
-  <section class="card">
-    <h2 style="margin:0">任務列表</h2>
-    <div id="tasks_box" style="display:grid;gap:10px;margin-top:12px"></div>
-    <div id="tasks_msg" class="small" style="margin-top:10px"></div>
-  </section>
+    <div id="dashboard_view">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <div>
+            <h1 id="page_title" style="margin:0; font-size:1.4rem;">主控台</h1>
+            <div class="small" id="header_date_line"></div>
+        </div>
+        </div>
+
+        <section class="card" id="events_card" style="border-left: 4px solid #2196f3;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2 style="margin:0; border:none; padding:0;">📆 近期重要行事曆</h2>
+            <div id="mgr_event_btns" style="display:none; gap:6px;">
+                <button id="btn_history" class="btn-history">📅 查詢</button>
+                <button id="btn_toggle_event_add" class="btn-history" style="background:#2196f3;">+ 新增</button>
+            </div>
+        </div>
+
+        <div id="event_add_box" style="display:none; margin-top:10px; padding:10px; background:#f9f9f9; border-radius:6px; border:1px solid #eee;">
+            <input type="hidden" id="evt_id_edit" value="">
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
+                <div style="display:flex; gap:6px;">
+                    <label class="small" style="display:block">開始 <input type="date" id="evt_date_start"></label>
+                    <label class="small" style="display:block">結束 <input type="date" id="evt_date_end"></label>
+                </div>
+                <div style="flex:1; min-width:100px;">
+                    <label class="small">類型
+                        <select id="evt_type">
+                            <option value="施工">施工</option>
+                            <option value="維修">維修</option>
+                            <option value="重大事件">重大事件</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </label>
+                </div>
+                <div style="flex:2; min-width:180px;">
+                    <label class="small">內容 <input type="text" id="evt_content" placeholder="例如：二廠區電力歲修"></label>
+                </div>
+                <div style="display:flex; gap:4px;">
+                    <button id="btn_save_event" class="action-btn" style="width:auto; padding:8px 12px;">儲存</button>
+                    <button id="btn_del_event_form" class="action-btn" style="width:auto; padding:8px 10px; background:#d32f2f; display:none;">刪除</button>
+                    <button id="btn_cancel_event" class="action-btn" style="width:auto; padding:8px 10px; background:#ccc; color:#333;">取消</button>
+                </div>
+            </div>
+            <div id="evt_msg" class="small" style="color:#d10000; margin-top:4px;"></div>
+        </div>
+
+        <div id="events_list" style="margin-top:10px; display:grid; gap:6px;">
+            <div class="small">載入中...</div>
+        </div>
+        </section>
+
+        <dialog id="history_modal">
+            <div class="modal-header">
+                <h3 style="margin:0">歷史行事曆</h3>
+                <button class="modal-close" id="btn_close_history">✕</button>
+            </div>
+            <div class="cal-controls">
+                <button class="action-btn" style="width:36px;" id="cal_prev">&lt;</button>
+                <span class="cal-title" id="cal_title" style="font-size:1.1rem; font-weight:bold; padding-top:6px;"></span>
+                <button class="action-btn" style="width:36px;" id="cal_next">&gt;</button>
+            </div>
+            <div class="cal-grid" id="cal_grid"></div>
+        </dialog>
+
+        <div style="display:flex; gap:12px; align-items:flex-start; margin-top:15px; flex-wrap:wrap;">
+        <section class="card" id="today_card" style="flex:1; min-width:240px;">
+            <h2 style="margin:0; border:none; padding:0;">今天班表</h2>
+            <div class="small" id="today_date_line" style="margin-top:4px"></div>
+            <div id="today_box" style="margin-top:8px; display:grid; gap:6px"></div>
+            <div id="today_msg" class="small" style="margin-top:8px"></div>
+        </section>
+
+        <section class="card" id="mytasks_card" style="flex:2; min-width:280px;">
+            <h2 style="margin:0; border:none; padding:0;">我的任務（最近 5 筆）</h2>
+            <div id="mytasks_box" style="margin-top:8px; display:grid; gap:6px"></div>
+            <div id="mytasks_msg" class="small" style="margin-top:8px"></div>
+        </section>
+        </div>
+
+        <section class="card" style="margin-top:15px;">
+        <h2 style="margin:0; border:none; padding:0;">新增任務</h2>
+        <div class="grid" style="margin-top:8px">
+            <div><label class="small">標題<input id="task_title" placeholder="例如：巡檢清單更新" /></label></div>
+            <div>
+            <label class="small">狀態
+                <select id="task_status">
+                <option value="open" selected>open</option>
+                <option value="doing">doing</option>
+                <option value="done">done</option>
+                </select>
+            </label>
+            </div>
+            <div><label class="small">指派給（同場域，可複選）<select id="task_assignees" multiple size="4" style="height:80px;"></select></label></div>
+            <div style="display:flex; align-items:center; padding-top:20px">
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:0.9rem;">
+                <input type="checkbox" id="task_assign_all" style="width:auto; margin:0"> 指派給全體
+            </label>
+            </div>
+        </div>
+        <label class="small" style="display:block; margin-top:8px;">內容<textarea id="task_body" placeholder="可空" style="min-height:60px;"></textarea></label>
+        <button id="btn_create" class="action-btn" style="width:auto; padding:6px 16px; margin-top:8px;">建立任務</button>
+        <div id="create_msg" class="msg"></div>
+        </section>
+
+        <section class="card">
+        <h2 style="margin:0; border:none; padding:0;">任務列表</h2>
+        <div id="tasks_box" style="display:grid; gap:8px; margin-top:10px"></div>
+        <div id="tasks_msg" class="small" style="margin-top:8px"></div>
+        </section>
+    </div>
+  </main>
+
+  <script>
+    // 側邊欄折疊邏輯
+    function toggleNav(element) {
+      element.classList.toggle('active');
+    }
+
+    // ===== 頁面切換邏輯 (SPA 模擬) =====
+    let currentIframeUrl = "";
+
+    // 顯示主控台
+    window.showDashboard = function() {
+        document.getElementById('dashboard_view').style.display = 'block';
+        document.getElementById('tools_view').style.display = 'none';
+        document.getElementById('main_frame').style.display = 'none';
+        
+        // 更新側邊欄按鈕狀態
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('current'));
+        document.getElementById('btn_home').classList.add('current');
+        
+        currentIframeUrl = ""; 
+    }
+
+    // 顯示小工具
+    window.showTool = function(toolType, btnElement) {
+        document.getElementById('dashboard_view').style.display = 'none';
+        document.getElementById('main_frame').style.display = 'none';
+        document.getElementById('tools_view').style.display = 'block';
+
+        // 切換工具內容
+        document.getElementById('tool_ui_calc').style.display = (toolType === 'calc') ? 'block' : 'none';
+        document.getElementById('tool_ui_fee').style.display = (toolType === 'fee') ? 'block' : 'none';
+
+        // 更新按鈕樣式
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('current'));
+        if(btnElement) btnElement.classList.add('current');
+    }
+
+    // 載入外部頁面到 Iframe
+    window.loadPage = function(pageUrl) {
+        const siteId = document.getElementById('site_sel').value;
+        if(!siteId) {
+            alert("請先選擇場域");
+            return;
+        }
+
+        const fullUrl = `${pageUrl}?site_id=${encodeURIComponent(siteId)}`;
+        const frame = document.getElementById('main_frame');
+        
+        document.getElementById('dashboard_view').style.display = 'none';
+        document.getElementById('tools_view').style.display = 'none';
+        frame.style.display = 'block';
+        frame.src = fullUrl;
+        
+        currentIframeUrl = pageUrl;
+
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('current'));
+        if(event && event.currentTarget) {
+            event.currentTarget.classList.add('current');
+        }
+    }
+
+    // ===== 計算機邏輯 =====
+    let calcVal = "0";
+    function updateCalc(){ document.getElementById('calc_display').value = calcVal; }
+    window.calcAppend = function(v) {
+        if(calcVal === "0" && v !== ".") calcVal = "";
+        calcVal += v;
+        updateCalc();
+    }
+    window.calcDel = function() {
+        calcVal = calcVal.slice(0, -1);
+        if(calcVal === "") calcVal = "0";
+        updateCalc();
+    }
+    window.calcClear = function() {
+        calcVal = "0";
+        updateCalc();
+    }
+    window.calcResult = function() {
+        try {
+            // 安全性過濾
+            if(/[^0-9+\-*/.]/.test(calcVal)) throw new Error("Invalid");
+            calcVal = String(eval(calcVal)); 
+        } catch(e) {
+            calcVal = "Error";
+        }
+        updateCalc();
+    }
+
+    // ===== 金額試算邏輯 =====
+    let currentFeeMode = 'count'; // count or time
+
+    window.switchFeeMode = function(mode) {
+        currentFeeMode = mode;
+        const btnCount = document.getElementById('mode_btn_count');
+        const btnTime = document.getElementById('mode_btn_time');
+        
+        // 輸入區塊
+        const inputCount = document.getElementById('fee_input_group_count');
+        const inputTime = document.getElementById('fee_input_group_time');
+        
+        // 設定區塊
+        const settingCount = document.getElementById('fee_setting_count');
+        const settingTime = document.getElementById('fee_setting_time');
+
+        // 上限
+        const capInput = document.getElementById('fee_cap_amount');
+        const capCheck = document.getElementById('fee_has_cap');
+
+        if(mode === 'count') {
+            btnCount.classList.add('active'); btnTime.classList.remove('active');
+            inputCount.style.display = 'block'; inputTime.style.display = 'none';
+            settingCount.style.display = 'block'; settingTime.style.display = 'none';
+            // 預設無上限
+            capCheck.checked = false;
+            capInput.value = "";
+        } else {
+            btnTime.classList.add('active'); btnCount.classList.remove('active');
+            inputCount.style.display = 'none'; inputTime.style.display = 'block';
+            settingCount.style.display = 'none'; settingTime.style.display = 'block';
+            // 預設上限 300
+            capCheck.checked = true;
+            capInput.value = 300;
+        }
+        toggleCapInput();
+        document.getElementById('fee_result_area').style.display = 'none';
+    }
+
+    window.toggleCapInput = function() {
+        const check = document.getElementById('fee_has_cap');
+        const input = document.getElementById('fee_cap_amount');
+        if(check.checked) {
+            input.disabled = false;
+            input.style.display = 'block';
+        } else {
+            input.disabled = true;
+            input.style.display = 'none';
+        }
+    }
+
+    // === 國定假日資料庫 (2025-2026) ===
+    // 格式：YYYY-MM-DD
+    const holidaySet = new Set([
+        // 固定節日 2025
+        "2025-01-01", "2025-02-28", "2025-04-04", "2025-05-01", "2025-10-10",
+        // 2025 農曆春節 (除夕 1/27 ~ 初三 1/30)
+        "2025-01-27", "2025-01-28", "2025-01-29", "2025-01-30",
+        // 2025 清明 (4/4 已經在固定節日)
+        // 2025 端午 (5/31)
+        "2025-05-31",
+        // 2025 中秋 (10/6)
+        "2025-10-06",
+
+        // 固定節日 2026
+        "2026-01-01", "2026-02-28", "2026-04-04", "2026-05-01", "2026-10-10",
+        // 2026 農曆春節 (除夕 2/16 ~ 初三 2/19)
+        "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19",
+        // 2026 清明 (4/5)
+        "2026-04-05",
+        // 2026 端午 (6/19)
+        "2026-06-19",
+        // 2026 中秋 (9/25)
+        "2026-09-25"
+    ]);
+
+    function isNationalHoliday(dateStr) {
+        return holidaySet.has(dateStr);
+    }
+
+    window.calculateFee = function() {
+        let total = 0;
+        let details = "";
+        
+        // 規則讀取
+        const rule = document.querySelector('input[name="holiday_rule"]:checked').value;
+        const treatNationalHolidayAsHoliday = (rule === 'weekend');
+        const manualForceHoliday = document.getElementById('fee_manual_holiday').checked;
+
+        if (currentFeeMode === 'count') {
+            const sStr = document.getElementById('fee_date_start').value;
+            const eStr = document.getElementById('fee_date_end').value;
+            
+            if(!sStr || !eStr) { alert("請輸入開始與結束日期"); return; }
+            if(sStr > eStr) { alert("結束日期不能早於開始日期"); return; }
+
+            const dStart = new Date(sStr);
+            const dEnd = new Date(eStr);
+            
+            let normalDays = 0;
+            let holidayDays = 0;
+
+            // 遍歷日期區間
+            for (let d = new Date(dStart); d <= dEnd; d.setDate(d.getDate() + 1)) {
+                // 格式化 YYYY-MM-DD
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const isoDate = `${y}-${m}-${dd}`;
+
+                const day = d.getDay(); // 0=Sun, 6=Sat
+                const isWeekend = (day === 0 || day === 6);
+                const isNatHol = isNationalHoliday(isoDate);
+
+                let isHolidayRate = false;
+
+                if (manualForceHoliday) {
+                    isHolidayRate = true;
+                } else if (isWeekend) {
+                    isHolidayRate = true; 
+                } else if (isNatHol && treatNationalHolidayAsHoliday) {
+                    isHolidayRate = true;
+                }
+
+                if (isHolidayRate) holidayDays++; else normalDays++;
+            }
+
+            const priceNormal = parseFloat(document.getElementById('fee_count_normal').value) || 0;
+            const priceHoliday = parseFloat(document.getElementById('fee_count_holiday').value) || 0;
+            
+            total = (normalDays * priceNormal) + (holidayDays * priceHoliday);
+            details = `區間：${sStr} ~ ${eStr}\n平日：${normalDays} 天 × $${priceNormal}\n假日(含週末/國定)：${holidayDays} 天 × $${priceHoliday}`;
+
+        } else {
+            // Time Mode
+            const sVal = document.getElementById('fee_datetime_start').value;
+            const eVal = document.getElementById('fee_datetime_end').value;
+
+            if(!sVal || !eVal) { alert("請輸入完整的開始與結束時間"); return; }
+            
+            const tStart = new Date(sVal);
+            const tEnd = new Date(eVal);
+
+            if(tStart >= tEnd) { alert("結束時間必須晚於開始時間"); return; }
+
+            const diffMs = tEnd - tStart;
+            const diffMins = Math.floor(diffMs / 1000 / 60);
+            
+            const unit = parseFloat(document.getElementById('fee_time_unit').value) || 30;
+            const rateNormal = parseFloat(document.getElementById('fee_time_rate_normal').value) || 0;
+            const rateHoliday = parseFloat(document.getElementById('fee_time_rate_holiday').value) || 0;
+
+            const units = Math.ceil(diffMins / unit);
+
+            // 判斷費率：使用「開始時間」
+            const startDay = tStart.getDay();
+            const y = tStart.getFullYear();
+            const m = String(tStart.getMonth() + 1).padStart(2, '0');
+            const dd = String(tStart.getDate()).padStart(2, '0');
+            const isoStart = `${y}-${m}-${dd}`;
+
+            const isWeekend = (startDay === 0 || startDay === 6);
+            const isNatHol = isNationalHoliday(isoStart);
+            
+            let isHolidayRate = false;
+            
+            if (manualForceHoliday) {
+                isHolidayRate = true;
+            } else if (isWeekend) {
+                isHolidayRate = true;
+            } else if (isNatHol && treatNationalHolidayAsHoliday) {
+                isHolidayRate = true;
+            }
+            
+            const rate = isHolidayRate ? rateHoliday : rateNormal;
+            
+            total = units * rate;
+            
+            const holName = isNatHol ? "(國定假日)" : "";
+            details = `區間：${sVal.replace('T', ' ')} ~ ${eVal.replace('T', ' ')}\n總時長：${diffMins} 分鐘\n單位數：${units} (每${unit}分)\n費率類型：${isHolidayRate?`假日${holName}`:"平日"} ($${rate}/單位)`;
+        }
+
+        // 上限檢查
+        const hasCap = document.getElementById('fee_has_cap').checked;
+        if(hasCap) {
+            const cap = parseFloat(document.getElementById('fee_cap_amount').value) || 0;
+            if (total > cap) {
+                details += `\n(已觸發上限 $${cap}，原計算金額 $${total})`;
+                total = cap;
+            }
+        }
+
+        document.getElementById('fee_final_amount').textContent = `$${total}`;
+        document.getElementById('fee_detail_msg').textContent = details;
+        document.getElementById('fee_result_area').style.display = 'block';
+    }
+  </script>
 
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-    // Excel 解析（SheetJS）
     import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 
-    // ====== 你要填這兩個（跟 index.html 同一組）======
+    // ====== 請填入您的 Supabase 設定 ======
     const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
-    // ================================================
+    // ===================================
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const $ = (id) => document.getElementById(id);
 
-    function dbg(msg){
-      const el = document.getElementById("dbg");
-      el.textContent = msg || "";
+    function dbg(msg){ const el = document.getElementById("dbg"); if(el) el.textContent = msg || ""; }
+    function setText(el, t){ if(el) el.textContent = t || ""; }
+    function setMsg(el, t){ if(el) el.textContent = t || ""; }
+    function escapeHtml(s){ return (s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    
+    function toISODateLocal(d){
+      const tz = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - tz).toISOString().slice(0,10);
     }
-    function setText(el, t){ el.textContent = t || ""; }
-    function setMsg(el, t){ el.textContent = t || ""; }
+    // 設定 Header 日期
+    $("header_date_line").textContent = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 
+    // ====== 行事曆邏輯 (保留原功能) ======
+    function getTagClass(type){
+        if(type === '施工') return 'tag-construction';
+        if(type === '維修') return 'tag-maintenance';
+        if(type === '重大事件') return 'tag-major';
+        return 'tag-other';
+    }
+    function getCalEventClass(type){
+        if(type === '施工') return 'ce-construction';
+        if(type === '維修') return 'ce-maintenance';
+        if(type === '重大事件') return 'ce-major';
+        return 'ce-other';
+    }
 
-    // ====== 指派/人員名單輔助 ======
-        async function getSitePeople(siteId){
-      // ✅ 改用 RPC：由資料庫安全地回傳同場域名單（包含主管/工程師）
+    function diffDays(d1, d2) {
+        const t1 = new Date(d1).setHours(0,0,0,0);
+        const t2 = new Date(d2).setHours(0,0,0,0);
+        return Math.round((t1 - t2) / (1000 * 60 * 60 * 24));
+    }
+
+    // [編輯] 啟動編輯模式
+    window.startEditEvent = function(id, dateStart, dateEnd, type, content) {
+        $("history_modal").close(); 
+        $("evt_id_edit").value = id;
+        $("evt_date_start").value = dateStart;
+        $("evt_date_end").value = dateEnd;
+        $("evt_type").value = type;
+        $("evt_content").value = content;
+        
+        $("event_add_box").style.display = "block";
+        $("btn_save_event").textContent = "更新";
+        
+        const delBtn = $("btn_del_event_form");
+        delBtn.style.display = "block";
+        delBtn.onclick = () => window.deleteEvent(id, null, null);
+
+        $("evt_msg").textContent = "編輯中...";
+        $("events_card").scrollIntoView({ behavior: 'smooth' });
+    };
+
+    window.deleteEvent = async function(id, siteId, meUid) {
+        if(!confirm("確定要刪除這筆行事曆嗎？")) return;
+        const { error } = await supabase.from("site_events").delete().eq("id", id);
+        if(error) {
+            alert("刪除失敗：" + error.message);
+        } else {
+            location.reload(); 
+        }
+    };
+
+    async function refreshSiteEvents(siteId, isManager){
+        const listEl = $("events_list");
+        if(!listEl) return;
+        listEl.innerHTML = '<div class="small">載入中...</div>';
+        const todayStr = toISODateLocal(new Date());
+
+        const { data, error } = await supabase
+            .from("site_events")
+            .select("*")
+            .eq("site_id", siteId)
+            .gte("event_end_date", todayStr) 
+            .order("event_date", { ascending: true }) 
+            .limit(5);
+
+        if(error){
+            listEl.innerHTML = `<div class="small" style="color:red">無法讀取行事曆：${error.message}</div>`;
+            return;
+        }
+
+        if(!data || data.length === 0){
+            listEl.innerHTML = `<div class="small" style="color:#888;">近期無重大事件</div>`;
+            return;
+        }
+
+        listEl.innerHTML = "";
+        const todayObj = new Date(todayStr);
+
+        data.forEach(evt => {
+            const startObj = new Date(evt.event_date);
+            const endObj = new Date(evt.event_end_date);
+            const startDiff = diffDays(startObj, todayObj);
+            const endDiff = diffDays(endObj, todayObj);
+
+            let daysText = "";
+            let daysClass = "days-left";
+            let rowStyle = "";
+
+            if (startDiff > 0) {
+                if(startDiff === 1) { daysText = "明天開始"; daysClass += " days-urgent"; } 
+                else { daysText = `還有 ${startDiff} 天`; }
+            } else {
+                if (endDiff >= 0) {
+                    daysText = "🔥 進行中"; daysClass = "days-urgent";
+                    rowStyle = "background-color: #fff8f8;"; 
+                } else {
+                    daysText = "已結束";
+                    daysClass = "days-ended";
+                    rowStyle = "background-color: #f9f9f9; opacity: 0.8;";
+                }
+            }
+
+            let dateDisplay = evt.event_date;
+            if (evt.event_date !== evt.event_end_date) {
+                dateDisplay = `${evt.event_date} ~ ${evt.event_end_date}`;
+            }
+
+            let actions = "";
+            if(isManager) {
+                const safeContent = escapeHtml(evt.content).replace(/'/g, "&apos;");
+                actions = `
+                    <div class="btn-group-right">
+                        <button class="btn-icon btn-edit" title="編輯" onclick="startEditEvent('${evt.id}', '${evt.event_date}', '${evt.event_end_date}', '${evt.category}', '${safeContent}')">
+                           ✏️
+                        </button>
+                    </div>
+                `;
+            }
+
+            const div = document.createElement("div");
+            div.style.cssText = `padding:6px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between; ${rowStyle}`;
+            div.innerHTML = `
+                <div style="flex:1;">
+                    <span class="tag-event ${getTagClass(evt.category)}">${escapeHtml(evt.category)}</span>
+                    <span style="font-weight:600; font-size:14px; margin-right:6px;">${escapeHtml(evt.content)}</span>
+                    <span class="small" style="color:#666">(${dateDisplay})</span>
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <div class="${daysClass}" style="white-space:nowrap;">${daysText}</div>
+                    ${actions}
+                </div>
+            `;
+            listEl.appendChild(div);
+        });
+    }
+
+    // ====== 月曆功能 (保留原功能) ======
+    let calYear = new Date().getFullYear();
+    let calMonth = new Date().getMonth(); 
+    let cachedEvents = []; 
+
+    async function loadCalendarEvents(siteId){
+        const { data, error } = await supabase
+            .from("site_events")
+            .select("*")
+            .eq("site_id", siteId);
+        
+        if(!error && data) {
+            cachedEvents = data;
+        }
+        renderCalendar();
+    }
+
+    function renderCalendar() {
+        const grid = $("cal_grid");
+        const title = $("cal_title");
+        
+        title.textContent = `${calYear} 年 ${String(calMonth + 1).padStart(2, '0')} 月`;
+        grid.innerHTML = "";
+        
+        const weeks = ["日","一","二","三","四","五","六"];
+        weeks.forEach(w => {
+            const div = document.createElement("div");
+            div.className = "cal-head";
+            div.textContent = w;
+            grid.appendChild(div);
+        });
+
+        const firstDay = new Date(calYear, calMonth, 1).getDay(); 
+        const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+        const today = new Date();
+        const isCurrentMonth = (today.getFullYear() === calYear && today.getMonth() === calMonth);
+        const todayDate = today.getDate();
+
+        for(let i=0; i<firstDay; i++){
+            const div = document.createElement("div");
+            div.className = "cal-day other-month";
+            grid.appendChild(div);
+        }
+
+        for(let d=1; d<=daysInMonth; d++){
+            const div = document.createElement("div");
+            div.className = "cal-day";
+            if(isCurrentMonth && d === todayDate) div.classList.add("cal-today");
+            
+            div.innerHTML = `<span class="cal-date-num">${d}</span>`;
+            
+            const curDateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const daysEvents = cachedEvents.filter(evt => {
+                return evt.event_date <= curDateStr && evt.event_end_date >= curDateStr;
+            });
+            
+            daysEvents.forEach(evt => {
+                const bar = document.createElement("div");
+                bar.className = `cal-event-bar ${getCalEventClass(evt.category)}`;
+                bar.textContent = evt.content;
+                bar.title = `${evt.content} (${evt.category})\n${evt.event_date} ~ ${evt.event_end_date}`;
+                
+                const safeContent = escapeHtml(evt.content).replace(/'/g, "&apos;");
+                bar.onclick = (e) => {
+                    e.stopPropagation();
+                    startEditEvent(evt.id, evt.event_date, evt.event_end_date, evt.category, safeContent);
+                };
+                div.appendChild(bar);
+            });
+            grid.appendChild(div);
+        }
+    }
+
+    // ====== 事件儲存 ======
+    async function saveSiteEvent(siteId, meUid){
+        const idVal = $("evt_id_edit").value; 
+        const sVal = $("evt_date_start").value;
+        const eVal = $("evt_date_end").value;
+        const typeVal = $("evt_type").value;
+        const contentVal = $("evt_content").value.trim();
+        const msgEl = $("evt_msg");
+
+        if(!sVal || !eVal || !contentVal){
+            setMsg(msgEl, "請填寫完整日期與內容");
+            return;
+        }
+        
+        if(sVal > eVal){
+            setMsg(msgEl, "結束日期不能早於開始日期");
+            return;
+        }
+
+        setMsg(msgEl, idVal ? "更新中..." : "新增中...");
+        
+        let res;
+        if (idVal) {
+            res = await supabase.from("site_events").update({
+                event_date: sVal,
+                event_end_date: eVal,
+                category: typeVal,
+                content: contentVal
+            }).eq("id", idVal);
+        } else {
+            res = await supabase.from("site_events").insert({
+                site_id: siteId,
+                event_date: sVal,
+                event_end_date: eVal,
+                category: typeVal,
+                content: contentVal,
+                created_by: meUid
+            });
+        }
+
+        if(res.error){
+            setMsg(msgEl, "儲存失敗：" + res.error.message);
+        } else {
+            setMsg(msgEl, "");
+            closeEventForm();
+            location.reload(); 
+        }
+    }
+
+    function closeEventForm() {
+        $("evt_id_edit").value = "";
+        $("evt_content").value = "";
+        $("evt_msg").textContent = "";
+        $("event_add_box").style.display = "none";
+        $("btn_save_event").textContent = "儲存";
+        $("btn_del_event_form").style.display = "none";
+    }
+
+    async function getSitePeople(siteId){
       const r = await supabase.rpc("get_site_people", { p_site_id: siteId });
-
-      if (r.error){
-        return { error: r.error, people: [] };
-      }
-
-      const people = (r.data || []).map(x => ({
-        user_id: x.user_id,
-        name: x.display_name || x.user_id
-      }));
-
+      if (r.error) return { error: r.error, people: [] };
+      const people = (r.data || []).map(x => ({ user_id: x.user_id, name: x.display_name || x.user_id }));
       return { error: null, people };
     }
 
@@ -276,191 +1094,89 @@
       const sel = $("task_assignees");
       const allBox = $("task_assign_all");
       if (!sel) return;
-
       sel.innerHTML = "";
-
       const r = await getSitePeople(siteId);
       if (r.error){
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = "無法載入人員：" + r.error.message;
-        sel.appendChild(opt);
-        return;
+        const opt = document.createElement("option"); opt.value = ""; opt.textContent = "無法載入人員"; sel.appendChild(opt); return;
       }
-
       for (const it of r.people){
-        const opt = document.createElement("option");
-        opt.value = it.user_id;
-        opt.textContent = it.name;
-        sel.appendChild(opt);
+        const opt = document.createElement("option"); opt.value = it.user_id; opt.textContent = it.name; sel.appendChild(opt);
       }
-
-      // 勾選「全體」時禁用多選
       if (allBox){
-        const sync = () => {
-          const on = allBox.checked;
-          sel.disabled = on;
-          if (on){
-            // 全體模式下清空選取，避免誤會
-            for (const o of sel.options) o.selected = false;
-          }
-        };
+        const sync = () => { const on = allBox.checked; sel.disabled = on; if (on) for (const o of sel.options) o.selected = false; };
         allBox.removeEventListener("change", allBox.__syncAssignAll || (()=>{}));
         allBox.__syncAssignAll = sync;
         allBox.addEventListener("change", sync);
         sync();
       }
     }
-    // =================================
-
 
     async function requireSession(){
       const { data, error } = await supabase.auth.getSession();
-      if (error){
-        dbg("getSession error: " + error.message);
-        return null;
-      }
-      if (!data.session){
-        dbg("尚未登入，跳回登入頁");
-        location.href = "./index.html";
-        return null;
-      }
+      if (error || !data.session){ location.href = "./index.html"; return null; }
       return data.session;
     }
 
     async function loadMe(){
       const sess = await requireSession();
       if (!sess) return null;
-
       const uid = sess.user.id;
-
-      const p = await supabase
-        .from("profiles")
-        .select("username,display_name")
-        .eq("user_id", uid)
-        .single();
-
-      const m = await supabase
-        .from("site_memberships")
-        .select("site_id,role,is_active,user_id")
-        .eq("user_id", uid)
-        .eq("is_active", true);
-
-      if (p.error){
-        setText($("me_line"), "profile 讀取失敗：" + p.error.message);
-        dbg("profiles error: " + p.error.message);
+      
+      const p = await supabase.from("profiles").select("username,display_name").eq("user_id", uid).single();
+      const m = await supabase.from("site_memberships").select("site_id,role,is_active,user_id").eq("user_id", uid).eq("is_active", true);
+      
+      if (p.error || m.error) {
+        setText($("me_name"), "讀取失敗");
         return null;
       }
-      if (m.error){
-        setText($("me_line"), "membership 讀取失敗：" + m.error.message);
-        dbg("membership error: " + m.error.message);
-        return null;
-      }
-
+      
       const username = p.data.username;
       const name = p.data.display_name || "";
       const memberships = m.data || [];
-
-      setText($("me_line"),
-        `帳號：${username}` + (name ? `｜姓名：${name}` : "") +
-        `｜可用場域數：${memberships.length}`
-      );
-
+      
+      // 更新側邊欄個人資訊
+      setText($("me_name"), name || username);
+      
       return { uid, username, memberships };
     }
 
     async function loadSites(siteIds){
-      // 讀取 sites，並只顯示 membership 內的
       const s = await supabase.from("sites").select("id,code,name");
-      if (s.error){
-        dbg((document.getElementById("dbg").textContent || "") + " | sites error: " + s.error.message);
-        return { map:{}, list:[] };
-      }
-
-      const map = {};
-      for (const it of s.data) map[it.id] = it;
-
+      if (s.error) return { map:{}, list:[] };
+      const map = {}; for (const it of s.data) map[it.id] = it;
       const list = siteIds.map(id => map[id]).filter(Boolean);
       return { map, list };
     }
 
     async function refreshTasks(siteId, meUid){
-      const box = $("tasks_box");
-      box.innerHTML = "";
-      setText($("tasks_msg"), "讀取中…");
-
-      const t = await supabase
-        .from("tasks")
-        .select("id,site_id,title,body,status,created_at,created_by,assign_all")
-        .eq("site_id", siteId)
-        .order("created_at", { ascending: false });
-
-      if (t.error){
-        setText($("tasks_msg"), "tasks 讀取失敗：" + t.error.message);
-        return;
-      }
-
+      const box = $("tasks_box"); box.innerHTML = ""; setText($("tasks_msg"), "讀取中…");
+      const t = await supabase.from("tasks").select("*").eq("site_id", siteId).order("created_at", { ascending: false });
+      if (t.error){ setText($("tasks_msg"), "讀取失敗"); return; }
+      
       const rows = t.data || [];
-      if (rows.length === 0){
-        setText($("tasks_msg"), "目前沒有任務");
-        return;
-      }
-
+      if (rows.length === 0){ setText($("tasks_msg"), "目前沒有任務"); return; }
+      
       setText($("tasks_msg"), `共 ${rows.length} 筆`);
-
-      // 取得同場域人員名稱對照表（user_id -> name）
       const peopleRes = await getSitePeople(siteId);
-      const nameMap = {};
-      for (const it of (peopleRes.people || [])){
-        nameMap[it.user_id] = it.name;
-      }
+      const nameMap = {}; for (const it of (peopleRes.people || [])) nameMap[it.user_id] = it.name;
 
       const taskIds = rows.map(r => r.id);
+      const assRes = await supabase.from("task_assignees").select("task_id,user_id").in("task_id", taskIds);
+      const assMap = {};
+      if (!assRes.error) for(const it of (assRes.data||[])) { if(!assMap[it.task_id])assMap[it.task_id]=[]; assMap[it.task_id].push(it.user_id); }
 
-      // 取得 task_assignees（若表不存在或無權限，會顯示錯誤，但不致於整頁壞掉）
-      const assRes = await supabase
-        .from("task_assignees")
-        .select("task_id,user_id")
-        .in("task_id", taskIds);
-
-      const assMap = {}; // task_id -> [user_id]
-      if (!assRes.error){
-        for (const it of (assRes.data || [])){
-          if (!assMap[it.task_id]) assMap[it.task_id] = [];
-          assMap[it.task_id].push(it.user_id);
-        }
-      }
-
-      // 取得 task_completions
-      const cRes = await supabase
-        .from("task_completions")
-        .select("task_id,user_id,completed_at")
-        .in("task_id", taskIds)
-        .order("completed_at", { ascending: false });
-
-      const compMap = {}; // task_id -> [{user_id, completed_at}]
-      if (!cRes.error){
-        for (const it of (cRes.data || [])){
-          if (!compMap[it.task_id]) compMap[it.task_id] = [];
-          compMap[it.task_id].push(it);
-        }
-      }
+      const cRes = await supabase.from("task_completions").select("task_id,user_id,completed_at").in("task_id", taskIds).order("completed_at", { ascending: false });
+      const compMap = {};
+      if (!cRes.error) for(const it of (cRes.data||[])) { if(!compMap[it.task_id])compMap[it.task_id]=[]; compMap[it.task_id].push(it); }
 
       for (const r of rows){
         const explicit = assMap[r.id] || [];
         const isAll = !!r.assign_all;
-        const assigneeNames = isAll
-          ? "同場域全體"
-          : (explicit.length ? explicit.map(uid => nameMap[uid] || uid).join("、") : "未指派");
-
+        const assigneeNames = isAll ? "同場域全體" : (explicit.length ? explicit.map(uid => nameMap[uid] || uid).join("、") : "未指派");
         const canComplete = !!meUid && (isAll || explicit.includes(meUid));
         const myCompleted = !!meUid && (compMap[r.id] || []).some(x => x.user_id === meUid);
-
         const doneLine = (compMap[r.id] && compMap[r.id].length)
-          ? "已完成：" + compMap[r.id]
-              .slice(0, 5) // 最多顯示 5 筆，避免太長
-              .map(x => (nameMap[x.user_id] || x.user_id) + "（" + new Date(x.completed_at).toLocaleString() + "）")
-              .join("\n")
+          ? "已完成：" + compMap[r.id].slice(0, 5).map(x => (nameMap[x.user_id] || x.user_id) + "（" + new Date(x.completed_at).toLocaleString() + "）").join("\n")
           : "";
 
         const div = document.createElement("div");
@@ -474,104 +1190,38 @@
           <div class="small" style="margin-top:8px">指派：${escapeHtml(assigneeNames)}</div>
           <div class="small" style="margin-top:6px">status：${escapeHtml(r.status)}</div>
           ${doneLine ? `<div class="doneby">${escapeHtml(doneLine)}</div>` : ``}
-          ${(canComplete && !myCompleted && r.status !== "done")
-            ? `<button data-done="${r.id}" style="margin-top:10px">已完成</button>`
-            : ``}
+          ${(canComplete && !myCompleted && r.status !== "done") ? `<button class="action-btn" data-done="${r.id}" style="margin-top:10px; width:auto; padding:4px 10px;">已完成</button>` : ``}
         `;
-
         box.appendChild(div);
 
         const doneBtn = div.querySelector('button[data-done]');
         if (doneBtn){
           doneBtn.addEventListener("click", async () => {
             const id = doneBtn.getAttribute("data-done");
-
-            // 1) 記錄完成者（允許多人各自完成）
-            const insC = await supabase
-              .from("task_completions")
-              .insert({ task_id: id, user_id: meUid });
-
-            if (insC.error){
-              setText($("tasks_msg"), "完成紀錄寫入失敗：" + insC.error.message);
-              return;
-            }
-
-            // 2) 將任務狀態設為 done（如果你想「全體都完成才 done」，這段可改）
-            const up = await supabase
-              .from("tasks")
-              .update({ status: "done" })
-              .eq("id", id);
-
-            if (up.error){
-              setText($("tasks_msg"), "更新失敗：" + up.error.message);
-              return;
-            }
-
+            await supabase.from("task_completions").insert({ task_id: id, user_id: meUid });
+            await supabase.from("tasks").update({ status: "done" }).eq("id", id);
             await refreshTasks(siteId, meUid);
             await refreshMyTasksPanel(siteId, meUid);
           });
         }
       }
-
-      if (assRes.error){
-        // 只提示一次，不中斷
-        setText($("tasks_msg"), `共 ${rows.length} 筆（注意：task_assignees 讀取失敗：${assRes.error.message}）`);
-      }
-      if (cRes.error){
-        setText($("tasks_msg"), `共 ${rows.length} 筆（注意：task_completions 讀取失敗：${cRes.error.message}）`);
-      }
     }
 
     async function refreshMyTasksPanel(siteId, meUid){
-      const box = document.getElementById("mytasks_box");
-      const msg = document.getElementById("mytasks_msg");
+      const box = $("mytasks_box");
+      const msg = $("mytasks_msg");
       if (!box || !msg) return;
-
-      box.innerHTML = "";
-      msg.textContent = "讀取中…";
-
-      // 先抓近期任務（同場域）
-      const t = await supabase
-        .from("tasks")
-        .select("id,site_id,title,status,created_at,created_by,assign_all")
-        .eq("site_id", siteId)
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      if (t.error){
-        msg.textContent = "讀取失敗：" + t.error.message;
-        return;
-      }
-
+      box.innerHTML = ""; msg.textContent = "讀取中…";
+      const t = await supabase.from("tasks").select("*").eq("site_id", siteId).order("created_at", { ascending: false }).limit(50);
+      if (t.error){ msg.textContent = "讀取失敗"; return; }
       const rows = t.data || [];
-      if (!rows.length){
-        msg.textContent = "目前沒有任務";
-        return;
-      }
-
+      if (!rows.length){ msg.textContent = "目前沒有任務"; return; }
       const taskIds = rows.map(r => r.id);
-
-      // 找出「指派給我」的 task_id（只查這 50 筆裡的）
-      const ass = await supabase
-        .from("task_assignees")
-        .select("task_id")
-        .eq("user_id", meUid)
-        .in("task_id", taskIds);
-
+      const ass = await supabase.from("task_assignees").select("task_id").eq("user_id", meUid).in("task_id", taskIds);
       const assignedSet = new Set((ass.error ? [] : (ass.data || []).map(x => x.task_id)));
-
-      // 我建立 OR 被指派 OR 全體
-      const mine = rows.filter(r =>
-        r.created_by === meUid || !!r.assign_all || assignedSet.has(r.id)
-      ).slice(0, 5);
-
-      if (!mine.length){
-        msg.textContent = "你目前沒有被指派或建立的近期任務";
-        return;
-      }
-
+      const mine = rows.filter(r => r.created_by === meUid || !!r.assign_all || assignedSet.has(r.id)).slice(0, 5);
+      if (!mine.length){ msg.textContent = "你目前沒有近期任務"; return; }
       msg.textContent = `顯示 ${mine.length} / ${rows.length}`;
-
       for (const r of mine){
         const div = document.createElement("div");
         div.className = "task";
@@ -584,79 +1234,50 @@
         `;
         box.appendChild(div);
       }
-
-      if (ass.error){
-        msg.textContent = `顯示 ${mine.length} / ${rows.length}（注意：task_assignees 讀取失敗：${ass.error.message}）`;
-      }
     }
 
+    function roleLabel(role){ return (role === "engineer" ? "工程師" : (role === "supervisor" ? "主管" : "員工")); }
+    function isManagerRole(role){ return role === "engineer" || role === "supervisor"; }
 
-    function escapeHtml(s){
-      return (s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    }
-
-
-    // ====== 班表（匯入/今日顯示）======
-    function roleLabel(role){
-      if (role === "engineer") return "工程師";
-      if (role === "supervisor") return "主管";
-      if (role === "employee") return "員工";
-      return role || "未知";
-    }
-
-    function isManagerRole(role){
-      return role === "engineer" || role === "supervisor";
-    }
-
-    // ====== 請假審核紅點（主管/工程師）======
+    // 🔴 審核按鈕與外層紅點邏輯
     async function refreshLeaveBadge(siteId, roleCur){
-      const reviewBtn = document.getElementById("btn_leave_review");
-      const badge = document.getElementById("leave_badge");
-      if (!reviewBtn || !badge) return;
-
+      const btnGroup = $("group_manager"); // 主管管理分類
+      const reviewBtn = $("btn_leave_review"); // 內部審核按鈕
+      const badge = $("leave_badge"); // 內部紅點
+      const groupBadge = $("group_badge"); // 外層分類標題紅點
+      
+      if (!btnGroup || !reviewBtn || !badge || !groupBadge) return;
+      
       const isMgr = isManagerRole(roleCur);
-      reviewBtn.style.display = isMgr ? "" : "none";
-
-      if (!isMgr){
-        badge.style.display = "none";
-        return;
+      
+      // 權限控制
+      if(isMgr) {
+          btnGroup.style.display = "block";
+      } else {
+          btnGroup.style.display = "none";
+          return; 
       }
 
-      const q = await supabase
-        .from("leave_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("site_id", siteId)
-        .eq("status", "pending");
+      // 查詢待審核
+      const q = await supabase.from("leave_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("site_id", siteId)
+          .eq("status", "pending");
+          
+      const count = q.count || 0;
 
-      if (q.error){
-        badge.style.display = "none";
-        return;
+      // 紅點顯示邏輯
+      if (!q.error && count > 0) {
+          // 內部紅點
+          badge.style.display = "inline-block";
+          reviewBtn.title = `有 ${count} 筆待審核`;
+          // 外層紅點 (不需展開就看得到)
+          groupBadge.style.display = "inline-block";
+      } else {
+          badge.style.display = "none";
+          reviewBtn.title = "審核請假";
+          groupBadge.style.display = "none";
       }
-
-      badge.style.display = (q.count || 0) > 0 ? "" : "none";
-    }
-    // =======================================
-    function toISODateLocal(d){
-      // 轉成本地日期字串 YYYY-MM-DD（避免時區造成日期跑掉）
-      const tz = d.getTimezoneOffset() * 60000;
-      return new Date(d.getTime() - tz).toISOString().slice(0,10);
-    }
-    function normDateCell(v){
-      if (!v) return null;
-      if (v instanceof Date && !isNaN(v.getTime())) return toISODateLocal(v);
-      // 有些 Excel 可能是數字序列（視 raw/cellDates 而定）
-      if (typeof v === "number" && isFinite(v)){
-        // Excel 1900 date system
-        const epoch = new Date(Date.UTC(1899, 11, 30)); // 1899-12-30
-        const d = new Date(epoch.getTime() + v * 86400000);
-        return toISODateLocal(d);
-      }
-      // 若是字串日期
-      if (typeof v === "string"){
-        const t = Date.parse(v);
-        if (!isNaN(t)) return toISODateLocal(new Date(t));
-      }
-      return null;
     }
 
     async function refreshTodaySchedule(siteId){
@@ -664,435 +1285,186 @@
       const msg = $("today_msg");
       const dateLine = $("today_date_line");
       if (!box || !msg || !dateLine) return;
-
-      box.innerHTML = "";
-      msg.textContent = "讀取中…";
-
+      box.innerHTML = ""; msg.textContent = "讀取中…";
       const today = toISODateLocal(new Date());
-      dateLine.textContent = "日期：" + today;
-
-      const q = await supabase
-        .from("site_schedules")
-        .select("person_name,shift")
-        .eq("site_id", siteId)
-        .eq("work_date", today)
-        .order("person_name", { ascending: true });
-
-      if (q.error){
-        msg.textContent = "班表讀取失敗：" + q.error.message;
-        return;
-      }
-
+      dateLine.textContent = today;
+      const q = await supabase.from("site_schedules").select("person_name,shift").eq("site_id", siteId).eq("work_date", today).order("person_name", { ascending: true });
+      if (q.error){ msg.textContent = "讀取失敗"; return; }
       const rows = q.data || [];
-      if (!rows.length){
-        msg.textContent = "今天沒有班表資料（可由工程師/主管匯入）";
-        return;
-      }
-
+      if (!rows.length){ msg.textContent = "今天沒有班表"; return; }
       msg.textContent = `共 ${rows.length} 人`;
       for (const r of rows){
         const div = document.createElement("div");
         div.className = "task";
+        div.style.padding = "6px";
         const shiftText = String(r.shift || "").trim();
-let cls = "";
-if (["休","休假","喪假","事假","病假","生理假"].includes(shiftText)){
-  cls = "shift-red";
-}
-if (["特休","行政"].includes(shiftText)){
-  cls = "shift-orange";
-}
-
-div.innerHTML = `
-  <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
-    <strong>${escapeHtml(r.person_name || "")}</strong>
-    <span class="small ${cls}">${escapeHtml(shiftText)}</span>
-  </div>
-`;box.appendChild(div);
+        let cls = "";
+        if (["休","休假","喪假","事假","病假","生理假"].includes(shiftText)) cls = "shift-red";
+        if (["特休","行政"].includes(shiftText)) cls = "shift-orange";
+        div.innerHTML = `<div style="display:flex;justify-content:space-between; font-size:0.9rem;"><strong>${escapeHtml(r.person_name)}</strong><span class="small ${cls}">${escapeHtml(shiftText)}</span></div>`;
+        box.appendChild(div);
       }
     }
-
 
     async function refreshMyScheduleLine(siteId, meUid){
-      const el = document.getElementById("my_shift_line");
+      const el = $("my_shift_text");
       if (!el) return;
-
       const today = toISODateLocal(new Date());
       const tomorrow = toISODateLocal(new Date(Date.now() + 86400000));
-
-      // 先從對照表找出「屬於我」的班表姓名（可能多筆）
-      const links = await supabase
-        .from("site_person_links")
-        .select("person_name")
-        .eq("site_id", siteId)
-        .eq("user_id", meUid);
-
-      if (links.error){
-        el.textContent = "班表：讀取失敗（對照表）：" + links.error.message;
-        return;
-      }
-
+      const links = await supabase.from("site_person_links").select("person_name").eq("site_id", siteId).eq("user_id", meUid);
+      if (links.error) return;
       const names = (links.data || []).map(x => String(x.person_name||"").trim()).filter(Boolean);
-
-      if (!names.length){
-        el.textContent = "班表：尚未連結姓名（請用「人員對照」把班表姓名連到你的帳號）";
-        return;
-      }
-
-      // 查今天 + 明天（同一個查詢減少 roundtrip）
-      const q = await supabase
-        .from("site_schedules")
-        .select("work_date,person_name,shift")
-        .eq("site_id", siteId)
-        .in("person_name", names)
-        .in("work_date", [today, tomorrow]);
-
-      if (q.error){
-        el.textContent = "班表：讀取失敗：" + q.error.message;
-        return;
-      }
-
+      if (!names.length){ el.textContent = "尚未連結姓名"; return; }
+      
+      const q = await supabase.from("site_schedules").select("work_date,person_name,shift").eq("site_id", siteId).in("person_name", names).in("work_date", [today, tomorrow]);
+      if (q.error) return;
+      
       const rows = q.data || [];
-      const todayShifts = rows.filter(r => r.work_date === today).map(r => `${r.shift}`.trim()).filter(Boolean);
-      const tomShifts = rows.filter(r => r.work_date === tomorrow).map(r => `${r.shift}`.trim()).filter(Boolean);
-
-      const t1 = todayShifts.length ? todayShifts.join("、") : "（無）";
-      const t2 = tomShifts.length ? tomShifts.join("、") : "（無）";
-
-
-// 下一次「休/喪假/事假/病假/特休」日期（在明日之後）
-const dayAfterTomorrow = toISODateLocal(new Date(Date.now() + 2*86400000));
-const specialKinds = ["休","休假","喪假","事假","病假","生理假","特休"];
-
-const nextQ = await supabase
-  .from("site_schedules")
-  .select("work_date,shift,person_name")
-  .eq("site_id", siteId)
-  .in("person_name", names)
-  .in("shift", specialKinds)
-  .gte("work_date", dayAfterTomorrow)
-  .order("work_date", { ascending: true })
-  .limit(20);
-
-let nextSpecialText = "—";
-if (!nextQ.error){
-  const nxt = (nextQ.data || [])[0];
-  if (nxt){
-    nextSpecialText = `${nxt.work_date}（${String(nxt.shift||"").trim()}）`;
-  }
-}
-      el.innerHTML = `
-<span class="shift-label">班表</span>
-<span class="shift-today">今日：${escapeHtml(t1)}</span>
-<span class="shift-tomorrow">明日：${escapeHtml(t2)}</span>
-<span class="shift-next" style="background:#fff3e0;color:#7a4b00;padding:4px 10px;border-radius:16px;font-size:14px">
-  下一次假別：${escapeHtml(nextSpecialText)}
-</span>
-`;}
-
-    async function importScheduleXlsx(siteId, meUid){
-      const f = $("sched_file")?.files?.[0];
-      if (!f){
-        setMsg($("import_msg"), "請先選擇 .xlsx 檔案");
-        return;
-      }
-
-      setMsg($("import_msg"), "解析中…");
-
-      let rows;
-      try{
-        const buf = await f.arrayBuffer();
-        const wb = XLSX.read(buf, { type: "array", cellDates: true });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
-      }catch(e){
-        setMsg($("import_msg"), "Excel 解析失敗：" + (e?.message || String(e)));
-        return;
-      }
-
-      if (!rows || rows.length < 3){
-        setMsg($("import_msg"), "檔案內容太少，至少要有：第1列日期、第3列起人員資料");
-        return;
-      }
-
-      const dateRow = rows[0] || [];
-      // 第 2 列通常是星期提示（可忽略）
-      const dataStartRow = 2;
-
-      // 蒐集所有日期欄位（B 欄起）
-      const dateCols = [];
-      for (let c = 1; c < dateRow.length; c++){
-        const iso = normDateCell(dateRow[c]);
-        if (iso){
-          dateCols.push({ c, iso });
-        }
-      }
-
-      if (!dateCols.length){
-        setMsg($("import_msg"), "找不到日期列（第 1 列 B1 起）");
-        return;
-      }
-
-      const allDates = dateCols.map(x => x.iso).sort();
-      const minDate = allDates[0];
-      const maxDate = allDates[allDates.length - 1];
-
-      // 轉成要寫入的資料列
-      const out = [];
-      for (let r = dataStartRow; r < rows.length; r++){
-        const name = String(rows[r]?.[0] ?? "").trim();
-        if (!name) continue;
-
-        for (const dc of dateCols){
-          const v = rows[r]?.[dc.c];
-          const shift = String(v ?? "").trim();
-          if (!shift) continue;
-
-          out.push({
-            site_id: siteId,
-            work_date: dc.iso,
-            person_name: name,
-            shift,
-            imported_by: meUid
-          });
-        }
-      }
-
-      if (!out.length){
-        setMsg($("import_msg"), "沒有可匯入的班表內容（交叉格皆空白）");
-        return;
-      }
-
-      setMsg($("import_msg"), `準備寫入 ${out.length} 筆（${minDate} ～ ${maxDate}）
-先清除既有區間資料…`);
-
-      // 1) 先刪除同場域該日期區間（讓匯入可覆蓋）
-      const del = await supabase
-        .from("site_schedules")
-        .delete()
-        .eq("site_id", siteId)
-        .gte("work_date", minDate)
-        .lte("work_date", maxDate);
-
-      if (del.error){
-        setMsg($("import_msg"), "清除舊資料失敗（可能被 RLS 擋住）：" + del.error.message);
-        return;
-      }
-
-      // 2) 分批插入（避免一次太大）
-      const chunkSize = 500;
-      for (let i = 0; i < out.length; i += chunkSize){
-        const chunk = out.slice(i, i + chunkSize);
-        const ins = await supabase.from("site_schedules").insert(chunk);
-        if (ins.error){
-          setMsg($("import_msg"), `寫入失敗（第 ${i+1}～${i+chunk.length} 筆）：` + ins.error.message);
-          return;
-        }
-      }
-
-      setMsg($("import_msg"), `匯入完成：${out.length} 筆（${minDate} ～ ${maxDate}）`, true);
-
-      // 立即刷新今天班表
-      await refreshTodaySchedule(siteId);
-      await refreshMyScheduleLine(siteId, meUid);
+      const t1 = rows.filter(r => r.work_date === today).map(r => r.shift).join("、") || "無";
+      const t2 = rows.filter(r => r.work_date === tomorrow).map(r => r.shift).join("、") || "無";
+      
+      el.innerHTML = `今日：<span style="color:#0d47a1; font-weight:bold;">${escapeHtml(t1)}</span><br>明日：${escapeHtml(t2)}`;
     }
-    // ==================================
 
     async function main(){
-      // 先綁登出（避免前面失敗時按鈕沒反應）
-      $("btn_logout").addEventListener("click", async () => {
-        await supabase.auth.signOut();
-        location.href = "./index.html";
-      });
-
+      $("btn_logout").addEventListener("click", async () => { await supabase.auth.signOut(); location.href = "./index.html"; });
       const me = await loadMe();
-      if (!me){
-        setText($("tasks_msg"), "登入狀態或資料讀取失敗，請重新整理或重新登入。");
-        return;
-      }
-
+      if (!me){ setText($("tasks_msg"), "登入失敗"); return; }
       const siteIds = me.memberships.map(x => x.site_id);
       const { list: siteList } = await loadSites(siteIds);
-
       const sel = $("site_sel");
       sel.innerHTML = "";
-      for (const s of siteList){
-        const opt = document.createElement("option");
-        opt.value = s.id;
-        opt.textContent = `${s.name} (${s.code})`;
-        sel.appendChild(opt);
-      }
-
+      for (const s of siteList){ const opt = document.createElement("option"); opt.value = s.id; opt.textContent = `${s.name} (${s.code})`; sel.appendChild(opt); }
       const currentSiteId = siteList[0]?.id || "";
-      if (!currentSiteId){
-        setText($("tasks_msg"), "你目前沒有可用場域（membership 為 0）。請由工程師/主管在後台建立 membership。");
-        return;
-      }
+      if (!currentSiteId){ setText($("tasks_msg"), "無可用場域"); return; }
       sel.value = currentSiteId;
 
-      // 顯示今天班表
-      await refreshTodaySchedule(currentSiteId);
+      const refreshAll = async () => {
+        const siteId = sel.value;
+        const roleCur = (me.memberships.find(x => x.site_id === siteId)?.role) || "";
+        const titleEl = $("page_title");
+        
+        // 更新左側欄資訊
+        $("me_role").textContent = roleLabel(roleCur);
+        if (titleEl) titleEl.textContent = `${siteList.find(s => s.id === siteId)?.name || ""} 主控台`;
+        
+        const isMgr = isManagerRole(roleCur);
 
-      // 匯入班表 UI（僅主管/工程師）
-      const roleNow = (me.memberships.find(x => x.site_id === currentSiteId)?.role) || "";
-      const siteNameNow = siteList.find(s => s.id === currentSiteId)?.name || "";
-      const titleEl = document.getElementById("page_title");
-      if (titleEl) titleEl.textContent = `${roleLabel(roleNow)} - ${siteNameNow || "未命名場域"}`;
+        await refreshTodaySchedule(siteId);
+        await refreshMyScheduleLine(siteId, me.uid);
+        await refreshLeaveBadge(siteId, roleCur); 
+        await loadAssignees(siteId);
+        await refreshTasks(siteId, me.uid);
+        await refreshMyTasksPanel(siteId, me.uid);
 
-      // 請假審核紅點（主管/工程師）
-      await refreshLeaveBadge(currentSiteId, roleNow);
+        await refreshSiteEvents(siteId, isMgr);
+        
+        const btnsBox = $("mgr_event_btns");
+        if(btnsBox){
+            btnsBox.style.display = isMgr ? "flex" : "none";
+            $("event_add_box").style.display = "none";
+        }
 
+        // --- Iframe 連動更新 ---
+        // 如果現在 Iframe 是打開的，切換場域後要自動 reload iframe 到新場域
+        const frame = $("main_frame");
+        if(frame.style.display !== "none" && window.currentIframeUrl) {
+            window.loadPage(window.currentIframeUrl);
+        }
+      };
 
-      // 顯示「我的 今日/明日 班表」（依目前場域）
-      await refreshMyScheduleLine(currentSiteId, me.uid);
+      await refreshAll();
+      sel.addEventListener("change", refreshAll);
 
-      // 人員對照（僅主管/工程師）按鈕：不遮蓋原本 UI，只是多一顆在頂部資訊旁
-      const mapBtn = document.getElementById("btn_mapping");
-      if (mapBtn){
-        mapBtn.style.display = isManagerRole(roleNow) ? "" : "none";
-        mapBtn.onclick = () => {
-          // 用新分頁開，避免打斷主控台操作
-          window.open(`./mapping.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
-        };
-      }
+      // ===== 行事曆 UI =====
+      $("btn_toggle_event_add").onclick = () => {
+        const box = $("event_add_box");
+        const isHidden = (box.style.display === "none");
+        
+        if(isHidden) {
+            $("evt_id_edit").value = "";
+            $("evt_content").value = "";
+            $("evt_msg").textContent = "";
+            $("btn_save_event").textContent = "儲存";
+            $("btn_del_event_form").style.display = "none";
 
-      // 匯入班表（僅主管/工程師）：放在「人員對照」旁
-      const impBtn = document.getElementById("btn_import_page");
-      if (impBtn){
-        impBtn.style.display = isManagerRole(roleNow) ? "" : "none";
-        impBtn.onclick = () => {
-          window.open(`./schedule_import.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
-        };
-      }
+            const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
+            const tmrStr = toISODateLocal(tmr);
+            $("evt_date_start").value = tmrStr;
+            $("evt_date_end").value = tmrStr; 
+            box.style.display = "block";
+        } else {
+            box.style.display = "none";
+        }
+      };
 
-// 查看班表：所有人可看；主管/工程師在該頁可編輯
-const viewBtn = document.getElementById("btn_schedule_view");
-if (viewBtn){
-  viewBtn.onclick = () => {
-    window.open(`./schedule_view.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
-  };
-}
-// === 新增以下邏輯 ===
-const statsBtn = document.getElementById("btn_stats");
-if (statsBtn){
-  statsBtn.onclick = () => {
-    // 開新分頁前往 stats.html
-    window.open(`./stats.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
-  };
-}
-// ===================
+      // Modal 控制
+      $("btn_history").onclick = async () => {
+          const m = $("history_modal");
+          await loadCalendarEvents(sel.value);
+          m.showModal();
+      };
+      $("btn_close_history").onclick = () => $("history_modal").close();
       
+      // 月曆上下月按鈕
+      $("cal_prev").onclick = () => {
+          calMonth--;
+          if(calMonth < 0){ calMonth = 11; calYear--; }
+          renderCalendar();
+      };
+      $("cal_next").onclick = () => {
+          calMonth++;
+          if(calMonth > 11){ calMonth = 0; calYear++; }
+          renderCalendar();
+      };
 
-// 申請休假：所有人可用
-const leaveApplyBtn = document.getElementById("btn_leave_apply");
-if (leaveApplyBtn){
-  leaveApplyBtn.onclick = () => {
-    window.open(`./leave_apply.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
-  };
-}
+      $("btn_cancel_event").onclick = () => {
+          closeEventForm();
+      };
 
-// 審核請假：主管/工程師
-const leaveReviewBtn = document.getElementById("btn_leave_review");
-if (leaveReviewBtn){
-  leaveReviewBtn.onclick = () => {
-    window.open(`./leave_review.html?site_id=${encodeURIComponent(sel.value)}`, "_blank");
-  };
-}
-
-// 每 30 秒刷新一次紅點（避免主管錯過新申請）
-setInterval(async () => {
-  try{
-    const siteId = sel.value;
-    const roleCur = (me.memberships.find(x => x.site_id === siteId)?.role) || "";
-    await refreshLeaveBadge(siteId, roleCur);
-  }catch(e){}
-}, 30000);
-await loadAssignees(currentSiteId);
-
-      await refreshTasks(currentSiteId, me.uid);
-      await refreshMyTasksPanel(currentSiteId, me.uid);
-
-      sel.addEventListener("change", async () => {
-        setMsg($("create_msg"), "");
-        // 依場域更新：今天班表 + 匯入權限顯示
-        await refreshTodaySchedule(sel.value);
-        await refreshMyScheduleLine(sel.value, me.uid);
-
-        const roleCur = (me.memberships.find(x => x.site_id === sel.value)?.role) || "";
-        const siteNameCur = siteList.find(s => s.id === sel.value)?.name || "";
-        const titleEl = document.getElementById("page_title");
-        if (titleEl) titleEl.textContent = `${roleLabel(roleCur)} - ${siteNameCur || "未命名場域"}`;
-
-        await refreshLeaveBadge(sel.value, roleCur);
-
-        const mapBtn = document.getElementById("btn_mapping");
-        if (mapBtn) mapBtn.style.display = isManagerRole(roleCur) ? "" : "none";
-        const impBtn = document.getElementById("btn_import_page");
-        if (impBtn) impBtn.style.display = isManagerRole(roleCur) ? "" : "none";
-
-        await loadAssignees(sel.value);
-        await refreshTasks(sel.value, me.uid);
-        await refreshMyTasksPanel(sel.value, me.uid);
+      $("evt_date_start").addEventListener("change", (e) => {
+          if(!$("evt_id_edit").value && !$("evt_date_end").value) $("evt_date_end").value = e.target.value;
       });
 
+      $("btn_save_event").onclick = () => {
+        saveSiteEvent(sel.value, me.uid);
+      };
+
+      // ===== 側邊欄按鈕連結 =====
       $("btn_create").addEventListener("click", async () => {
         setMsg($("create_msg"), "");
         const siteId = sel.value;
         const title = $("task_title").value.trim();
         const body = $("task_body").value.trim();
         const status = $("task_status").value;
-
         const assignAll = $("task_assign_all")?.checked || false;
         const assSel = $("task_assignees");
-        const assignees = assSel
-          ? Array.from(assSel.selectedOptions).map(o => o.value).filter(Boolean)
-          : [];
+        const assignees = assSel ? Array.from(assSel.selectedOptions).map(o => o.value).filter(Boolean) : [];
 
-        if (!title){
-          setMsg($("create_msg"), "請輸入標題");
-          return;
-        }
-
-        // 1) 建立 tasks
-        const ins = await supabase.from("tasks").insert({
-          site_id: siteId,
-          title,
-          body: body || null,
-          status,
-          created_by: me.uid,
-          assign_all: assignAll
-        }).select("id").single();
-
-        if (ins.error){
-          setMsg($("create_msg"), ins.error.message);
-          return;
-        }
-
+        if (!title){ setMsg($("create_msg"), "請輸入標題"); return; }
+        const ins = await supabase.from("tasks").insert({ site_id: siteId, title, body: body || null, status, created_by: me.uid, assign_all: assignAll }).select("id").single();
+        if (ins.error){ setMsg($("create_msg"), ins.error.message); return; }
         const taskId = ins.data.id;
-
-        // 2) 若不是全體，寫入多位指派
         if (!assignAll && assignees.length){
           const rows = assignees.map(uid => ({ task_id: taskId, user_id: uid }));
-          const insA = await supabase.from("task_assignees").insert(rows);
-          if (insA.error){
-            setMsg($("create_msg"), "任務已建立，但指派寫入失敗：\n" + insA.error.message);
-          }
+          await supabase.from("task_assignees").insert(rows);
         }
-
-        $("task_title").value = "";
-        $("task_body").value = "";
-        $("task_status").value = "open";
+        $("task_title").value = ""; $("task_body").value = ""; $("task_status").value = "open";
         if ($("task_assign_all")) $("task_assign_all").checked = false;
-        if (assSel){
-          for (const o of assSel.options) o.selected = false;
-          assSel.disabled = false;
-        }
-
-        await loadAssignees(siteId);
-        await refreshTasks(siteId, me.uid);
-        await refreshMyTasksPanel(siteId, me.uid);
+        if (assSel){ for (const o of assSel.options) o.selected = false; assSel.disabled = false; }
+        await loadAssignees(siteId); await refreshTasks(siteId, me.uid); await refreshMyTasksPanel(siteId, me.uid);
       });
-    }
 
+      // 移除了原本的 window.open，現在直接由 HTML 中的 onclick="loadPage()" 處理
+      // 但我們仍需保留定期檢查紅點的功能
+      setInterval(async () => {
+        try{
+            const siteId = sel.value;
+            const roleCur = (me.memberships.find(x => x.site_id === siteId)?.role) || "";
+            await refreshLeaveBadge(siteId, roleCur);
+        }catch(e){}
+      }, 30000);
+    }
     main();
   </script>
 </body>

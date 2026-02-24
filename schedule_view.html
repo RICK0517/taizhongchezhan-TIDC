@@ -11,35 +11,65 @@
     .card{border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px}
     input,select,button{padding:10px}
     button{font-weight:700;cursor:pointer}
-    table{width:100%;border-collapse:collapse;margin-top:10px}
-    th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;vertical-align:top}
-    th{font-size:13px;opacity:.75}
     .small{opacity:.75;font-size:13px;line-height:1.4}
     .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
     .ok{color:#0a7a2f}
-    .pill{display:inline-block;padding:2px 8px;border:1px solid #ddd;border-radius:999px;font-size:12px;opacity:.8}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    input[type="date"]{min-width:160px}
-    .w100{width:100%}
-    .cell{width:100%;padding:6px 8px}
-    .cell[disabled]{background:#f6f6f6;opacity:.85}
   
     /* ===== 月班表 ===== */
     #month_wrap{border:1px solid #eee;border-radius:10px;padding:10px;background:#fff}
-    #month_table th,#month_table td{border:1px solid #eee;padding:6px 8px;font-size:12px;white-space:nowrap}
-    #month_table th{background:#fafafa;font-weight:700}
+    #month_table th,#month_table td{border:1px solid #eee;padding:0;font-size:12px;white-space:nowrap; height: 36px; vertical-align: middle;}
+    #month_table th{background:#fafafa;font-weight:700; padding: 6px 8px;}
     #month_table .wk{font-weight:600;opacity:.75;background:#fcfcfc}
-    #month_table .namecell{font-weight:700;background:#fcfcfc;position:sticky;left:0;z-index:2}
+    #month_table .namecell{font-weight:700;background:#fcfcfc;position:sticky;left:0;z-index:2; padding: 6px 8px; border-right: 2px solid #eee;}
     #month_table .headsticky{position:sticky;top:0;z-index:3}
-    #month_table .cellshift{min-width:52px;text-align:center}
-    /* ===== 班別顏色規則 ===== */
-    .shift-red{
-      color:#d10000;
-      font-weight:700;}
+    #month_table .cellshift{min-width:52px;text-align:center; padding: 6px 8px;}
+    
+    /* ===== 直接編輯輸入框樣式 ===== */
+    .month-input {
+        width: 100%; height: 100%; border: none; 
+        background: transparent; text-align: center; 
+        font-size: 13px; padding: 8px 4px;
+        min-width: 50px;
+        font-family: inherit;
+        outline: none;
+        transition: background 0.2s;
+        cursor: pointer;
+    }
+    .month-input:focus {
+        background: #fff;
+        box-shadow: inset 0 0 0 2px #2196f3;
+        cursor: text;
+        z-index: 10;
+        position: relative;
+    }
+    
+    /* ===== 今日高亮樣式 ===== */
+    .today-col {
+        background-color: #fff9c4 !important; /* 淺黃色背景 */
+        border-left: 2px solid #fbc02d !important;
+        border-right: 2px solid #fbc02d !important;
+    }
+    .today-header {
+        background-color: #fff9c4 !important;
+        color: #f57f17;
+        font-weight: 800 !important;
+        border-top: 2px solid #fbc02d !important;
+    }
 
-    .shift-orange{
-      color:#e67e00;
-      font-weight:700;}
+    /* 狀態回饋 */
+    .saving-cell { background-color: #fff3e0 !important; } 
+    .saved-cell { background-color: #e8f5e9 !important; animation: fadeOut 1.5s forwards; } 
+    .error-cell { background-color: #ffebee !important; } 
+
+    @keyframes fadeOut {
+        0% { background-color: #e8f5e9; }
+        100% { background-color: transparent; }
+    }
+
+    /* ===== 班別顏色規則 ===== */
+    .shift-red{ color:#d10000; font-weight:700; }
+    .shift-orange{ color:#e67e00; font-weight:700; }
     
   </style>
 </head>
@@ -66,6 +96,7 @@
       <div class="small" id="month_hint" style="margin-top:6px">讀取中…</div>
     </div>
     <div class="row">
+      <button id="btn_jump_today" style="background:#fff9c4; border:1px solid #fbc02d; color:#f57f17;">跳至今天</button>
       <button id="btn_m_prev">上個月</button>
       <input id="month_sel" type="month" />
       <button id="btn_m_next">下個月</button>
@@ -75,43 +106,10 @@
   <div id="month_wrap" style="margin-top:12px;overflow-x:auto">
     <table id="month_table" style="width:max-content;border-collapse:collapse"></table>
   </div>
-  <div class="small" style="margin-top:10px;line-height:1.5">
-    欄為日期、列為姓名；顯示該月整體班表。主管/工程師若要修改，請用下方「單日」區塊編輯並儲存。
+  <div class="small" style="margin-top:10px;line-height:1.5; color:#666;">
+    💡 提示：點擊格子直接輸入班別，移開游標即自動儲存。黃色欄位為今日。
   </div>
 </section>
-
-<section class="card">
-
-    <div class="row">
-      <label class="small">日期
-        <input id="date_sel" type="date" />
-      </label>
-      <button id="btn_reload">重新載入</button>
-      <span id="edit_badge" class="pill" style="display:none">可編輯</span>
-      <span id="view_badge" class="pill" style="display:none">僅檢視</span>
-    </div>
-
-    <div class="row" style="margin-top:10px">
-      <button id="btn_add_row" style="display:none">新增一列</button>
-      <button id="btn_save_all" style="display:none">儲存全部</button>
-    </div>
-
-    <table>
-      <thead>
-        <tr>
-          <th style="width:34%">姓名</th>
-          <th style="width:34%">班別</th>
-          <th style="width:16%">操作</th>
-          <th style="width:16%">時間</th>
-        </tr>
-      </thead>
-      <tbody id="rows"></tbody>
-    </table>
-
-    <div class="small" style="margin-top:10px">
-      編輯規則：主管/工程師可直接改「姓名、班別」並儲存。儲存以 <code>site_id + work_date + person_name</code> 當作唯一鍵（若資料庫沒設唯一鍵，需補 Unique 才能避免重複）。
-    </div>
-  </section>
 
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -158,228 +156,183 @@
       return siteIds.map(id => map[id]).filter(Boolean);
     }
 
-    function makeRow({ person_name="", shift="" }, canEdit){
-      const tr = document.createElement("tr");
-      tr.dataset.origName = person_name || "";
-      tr.innerHTML = `
-        <td><input class="cell w100" data-k="name" value="${escapeHtml(person_name)}" ${canEdit?"":"disabled"} /></td>
-        <td><input class="cell w100" data-k="shift" value="${escapeHtml(shift)}" ${canEdit?"":"disabled"} /></td>
-        <td>
-          ${canEdit ? `
-            <button data-act="save">儲存</button>
-            <button data-act="del" style="margin-left:6px">刪除</button>
-          ` : `<span class="small">—</span>`}
-        </td>
-        <td class="small"></td>
-      `;
-      return tr;
+    function getShiftClass(shiftText) {
+        if (!shiftText) return "";
+        if (["休","喪假","事假","病假"].includes(shiftText)) return "shift-red";
+        if (["特休","行政"].includes(shiftText)) return "shift-orange";
+        return "";
     }
 
-    async function fetchSchedule(siteId, dateISO){
-      const q = await supabase
-        .from("site_schedules")
-        .select("person_name,shift")
-        .eq("site_id", siteId)
-        .eq("work_date", dateISO)
-        .order("person_name", { ascending:true });
-
-      if (q.error) throw new Error(q.error.message);
-      return q.data || [];
+    // ===== 月班表邏輯 =====
+    function pad2(n){ return String(n).padStart(2,"0"); }
+    function isoFromYMD(y,m,d){ return `${y}-${pad2(m)}-${pad2(d)}`; }
+    function daysInMonth(y,m){ return new Date(y, m, 0).getDate(); }
+    function weekdayZh(d){
+      const w = d.getDay();
+      return ["週日","週一","週二","週三","週四","週五","週六"][w] || "";
     }
 
-      async function saveRow(siteId, dateISO, tr){
-        const name = tr.querySelector('[data-k="name"]').value.trim();
-        const shift = tr.querySelector('[data-k="shift"]').value.trim();
-        const orig = (tr.dataset.origName || "").trim();
+    // 處理月班表格子變更 (自動儲存)
+    window.handleCellChange = async function(input) {
+        const newVal = input.value.trim();
+        const date = input.dataset.date;
+        const name = input.dataset.name;
+        const siteId = $("site_sel").value;
 
-        if (!name) throw new Error("姓名不可空白");
+        const td = input.parentElement;
+        td.classList.add("saving-cell");
+        td.classList.remove("saved-cell", "error-cell");
 
-        // 1) 先刪除：以「原本的 key」優先
-        //    - 如果原本有姓名(orig)，先刪 orig 那筆
-        //    - 如果原本沒有（新增列），就刪 name 那筆（避免重複點儲存造成衝突）
-        const keyNameToDelete = orig || name;
+        try {
+            await supabase.from("site_schedules").delete()
+                .eq("site_id", siteId)
+                .eq("work_date", date)
+                .eq("person_name", name);
+            
+            if (newVal) {
+                const { error } = await supabase.from("site_schedules").insert({
+                    site_id: siteId,
+                    work_date: date,
+                    person_name: name,
+                    shift: newVal
+                });
+                if (error) throw error;
+            }
 
-        const del = await supabase
-          .from("site_schedules")
-          .delete()
-          .eq("site_id", siteId)
-          .eq("work_date", dateISO)
-          .eq("person_name", keyNameToDelete);
+            td.classList.remove("saving-cell");
+            td.classList.add("saved-cell");
+            input.className = "month-input " + getShiftClass(newVal);
 
-        if (del.error) throw new Error("刪除失敗：" + del.error.message);
+        } catch(err) {
+            console.error(err);
+            td.classList.remove("saving-cell");
+            td.classList.add("error-cell");
+            setMsg("儲存失敗：" + err.message);
+        }
+    };
 
-        // 2) 再新增（insert）：刪乾淨後再寫入就不會衝突
-        const ins = await supabase
-          .from("site_schedules")
-          .insert({ site_id: siteId, work_date: dateISO, person_name: name, shift, imported_by: null });
-
-        if (ins.error) throw new Error("儲存失敗：" + ins.error.message);
-
-        // 3) 更新 origName（讓下次刪除用新 key）
-        tr.dataset.origName = name;
-      }
-    async function deleteRow(siteId, dateISO, tr){
-      const orig = (tr.dataset.origName || "").trim() || tr.querySelector('[data-k="name"]').value.trim();
-      if (!orig) return;
-      const del = await supabase
-        .from("site_schedules")
-        .delete()
-        .eq("site_id", siteId)
-        .eq("work_date", dateISO)
-        .eq("person_name", orig);
-      if (del.error) throw new Error(del.error.message);
-      tr.remove();
+    // 捲動到今天的邏輯
+    function scrollToToday() {
+        const todayEl = document.querySelector('.today-header');
+        if (todayEl) {
+            todayEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        } else {
+            // 如果今天不在當月，切換到當月
+            const now = new Date();
+            const currentYM = `${now.getFullYear()}-${pad2(now.getMonth()+1)}`;
+            if($("month_sel").value !== currentYM) {
+                $("month_sel").value = currentYM;
+                $("month_sel").dispatchEvent(new Event('change')); // 觸發重整
+            }
+        }
     }
 
-    async function render(siteId, me, siteList){
-      setMsg("讀取中…");
-      const rowsEl = $("rows");
-      rowsEl.innerHTML = "";
+    async function refreshMonth(siteId, roleCur, siteList){
+      const hint = $("month_hint");
+      const table = $("month_table");
+      const monthInput = $("month_sel");
+      if (!hint || !table || !monthInput) return;
 
-      const dateISO = $("date_sel").value;
-      const roleCur = (me.memberships.find(x => x.site_id === siteId)?.role) || "";
-      const canEdit = isManagerRole(roleCur);
-
+      // 更新上方的資訊列 (這是修復的關鍵)
       const s = siteList.find(x => x.id === siteId);
       $("site_line").textContent = s ? `目前場域：${s.name} (${s.code})` : `目前場域：${siteId}`;
       $("role_line").textContent = `你的身分：${roleLabel(roleCur)}`;
 
-      $("edit_badge").style.display = canEdit ? "" : "none";
-      $("view_badge").style.display = canEdit ? "none" : "";
+      const ym = monthInput.value;
+      if (!ym){ hint.textContent = "請選擇月份"; return; }
+      const [Y, M] = ym.split("-").map(x => parseInt(x,10));
+      if (!Y || !M){ hint.textContent = "月份格式錯誤"; return; }
 
-      $("btn_add_row").style.display = canEdit ? "" : "none";
-      $("btn_save_all").style.display = canEdit ? "" : "none";
+      const dim = daysInMonth(Y, M);
+      const start = isoFromYMD(Y, M, 1);
+      const end = isoFromYMD(Y, M, dim);
+      const canEdit = isManagerRole(roleCur);
+      
+      // 計算今天的日期字串
+      const todayStr = toISODateLocal(new Date());
 
-      let data;
-      try {
-        data = await fetchSchedule(siteId, dateISO);
-      } catch(e) {
-        setMsg("班表讀取失敗：" + (e?.message || String(e)));
+      hint.textContent = "讀取中…";
+      table.innerHTML = "";
+
+      const q = await supabase
+        .from("site_schedules")
+        .select("work_date,person_name,shift")
+        .eq("site_id", siteId)
+        .gte("work_date", start)
+        .lte("work_date", end);
+
+      if (q.error){
+        hint.textContent = "讀取失敗：" + q.error.message;
         return;
       }
 
-      if (!data.length){
-        setMsg(canEdit ? "當日沒有資料，你可以按「新增一列」建立。" : "當日沒有班表資料。");
-      } else {
-        setMsg(`共 ${data.length} 筆`, true);
+      const rows = q.data || [];
+      const nameSet = new Set(rows.map(r => String(r.person_name||"").trim()).filter(Boolean));
+      const names = Array.from(nameSet).sort((a,b)=>a.localeCompare(b, "zh-Hant"));
+
+      const dates = [];
+      for (let d=1; d<=dim; d++){
+        const iso = isoFromYMD(Y,M,d);
+        const dt = new Date(`${iso}T00:00:00`);
+        const isToday = (iso === todayStr);
+        dates.push({ iso, label: `${M}月${d}日`, wk: weekdayZh(dt), isToday });
       }
 
-      for (const r of data){
-        const tr = makeRow(r, canEdit);
-        if (canEdit){
-          tr.querySelector('[data-act="save"]').onclick = async () => {
-            try {
-              await saveRow(siteId, dateISO, tr);
-              setMsg("已儲存", true);
-            } catch(e) {
-              setMsg(String(e?.message || e));
-            }
-          };
-          tr.querySelector('[data-act="del"]').onclick = async () => {
-            if (!confirm("確定刪除這列？")) return;
-            try {
-              await deleteRow(siteId, dateISO, tr);
-              setMsg("已刪除", true);
-            } catch(e) {
-              setMsg("刪除失敗：" + (e?.message || String(e)));
-            }
-          };
+      const mp = new Map();
+      for (const r of rows){
+        const name = String(r.person_name||"").trim();
+        const date = r.work_date;
+        const shift = String(r.shift||"").trim();
+        if (!name || !date) continue;
+        if (!mp.has(name)) mp.set(name, new Map());
+        mp.get(name).set(date, shift);
+      }
+
+      // Render Header (日期)
+      const tr1 = document.createElement("tr");
+      tr1.innerHTML = `<th class="headsticky namecell">姓名</th>` + 
+        dates.map(d => `<th class="headsticky ${d.isToday ? 'today-header' : ''}" title="${d.wk}">${d.label}</th>`).join("");
+      table.appendChild(tr1);
+
+      // Render Header (星期)
+      const tr2 = document.createElement("tr");
+      tr2.innerHTML = `<th class="headsticky wk namecell">　</th>` + 
+        dates.map(d => `<th class="headsticky wk ${d.isToday ? 'today-col' : ''}">${d.wk}</th>`).join("");
+      table.appendChild(tr2);
+
+      // Render Body
+      for (const name of names){
+        const tr = document.createElement("tr");
+        const rowMap = mp.get(name) || new Map();
+        let tds = `<td class="namecell">${escapeHtml(name)}</td>`;
+        
+        for (const d of dates){
+          const shiftText = rowMap.get(d.iso) || "";
+          const cls = getShiftClass(shiftText);
+          const todayClass = d.isToday ? 'today-col' : '';
+
+          if (canEdit) {
+            tds += `<td class="${todayClass}">
+                <input class="month-input ${cls}" 
+                       data-date="${d.iso}" 
+                       data-name="${escapeHtml(name)}" 
+                       value="${escapeHtml(shiftText)}" 
+                       onfocus="this.select()"
+                       onchange="window.handleCellChange(this)">
+            </td>`;
+          } else {
+            tds += `<td class="cellshift ${cls} ${todayClass}">${escapeHtml(shiftText)}</td>`;
+          }
         }
-        rowsEl.appendChild(tr);
+        tr.innerHTML = tds;
+        table.appendChild(tr);
       }
+
+      hint.textContent = `月份：${ym}｜人員：${names.length}｜筆數：${rows.length}`;
+
+      // 自動捲動到今天
+      setTimeout(scrollToToday, 100);
     }
-
-
-function pad2(n){ return String(n).padStart(2,"0"); }
-function isoFromYMD(y,m,d){ return `${y}-${pad2(m)}-${pad2(d)}`; }
-function daysInMonth(y,m){ return new Date(y, m, 0).getDate(); } // m:1-12
-function weekdayZh(d){
-  const w = d.getDay();
-  return ["週日","週一","週二","週三","週四","週五","週六"][w] || "";
-}
-
-async function refreshMonth(siteId){
-  const hint = $("month_hint");
-  const table = $("month_table");
-  const monthInput = $("month_sel");
-  if (!hint || !table || !monthInput) return;
-
-  const ym = monthInput.value;
-  if (!ym){ hint.textContent = "請選擇月份"; return; }
-  const [Y, M] = ym.split("-").map(x => parseInt(x,10));
-  if (!Y || !M){ hint.textContent = "月份格式錯誤"; return; }
-
-  const dim = daysInMonth(Y, M);
-  const start = isoFromYMD(Y, M, 1);
-  const end = isoFromYMD(Y, M, dim);
-
-  hint.textContent = "讀取中…";
-  table.innerHTML = "";
-
-  const q = await supabase
-    .from("site_schedules")
-    .select("work_date,person_name,shift")
-    .eq("site_id", siteId)
-    .gte("work_date", start)
-    .lte("work_date", end);
-
-  if (q.error){
-    hint.textContent = "讀取失敗：" + q.error.message;
-    return;
-  }
-
-  const rows = q.data || [];
-  const nameSet = new Set(rows.map(r => String(r.person_name||"").trim()).filter(Boolean));
-  const names = Array.from(nameSet).sort((a,b)=>a.localeCompare(b, "zh-Hant"));
-
-  const dates = [];
-  for (let d=1; d<=dim; d++){
-    const iso = isoFromYMD(Y,M,d);
-    const dt = new Date(`${iso}T00:00:00`);
-    dates.push({ iso, label: `${M}月${d}日`, wk: weekdayZh(dt) });
-  }
-
-  const mp = new Map();
-  for (const r of rows){
-    const name = String(r.person_name||"").trim();
-    const date = r.work_date;
-    const shift = String(r.shift||"").trim();
-    if (!name || !date) continue;
-    if (!mp.has(name)) mp.set(name, new Map());
-    mp.get(name).set(date, shift);
-  }
-
-  const tr1 = document.createElement("tr");
-  tr1.innerHTML = `<th class="headsticky namecell">姓名</th>` + dates.map(d=>`<th class="headsticky">${d.label}</th>`).join("");
-  table.appendChild(tr1);
-
-  const tr2 = document.createElement("tr");
-  tr2.innerHTML = `<th class="headsticky wk namecell">　</th>` + dates.map(d=>`<th class="headsticky wk">${d.wk}</th>`).join("");
-  table.appendChild(tr2);
-
-  for (const name of names){
-    const tr = document.createElement("tr");
-    const rowMap = mp.get(name) || new Map();
-    let tds = `<td class="namecell">${escapeHtml(name)}</td>`;
-    for (const d of dates){
-     const shiftText = rowMap.get(d.iso) || "";
-
-    let cls = "";
-    if (["休","喪假","事假","病假"].includes(shiftText)){
-      cls = "shift-red";
-    }
-    if (["特休","行政"].includes(shiftText)){
-      cls = "shift-orange";
-    }
-
-    tds += `<td class="cellshift ${cls}">${escapeHtml(shiftText)}</td>`;
-    }
-    tr.innerHTML = tds;
-    table.appendChild(tr);
-  }
-
-  hint.textContent = `月份：${ym}｜人員：${names.length}｜筆數：${rows.length}`;
-}
 
 
     async function main(){
@@ -406,75 +359,45 @@ async function refreshMonth(siteId){
         sel.appendChild(opt);
       }
 
-      // 日期預設今天
-      $("date_sel").value = toISODateLocal(new Date());
-
       const qp = getQueryParam("site_id");
       const initSite = (qp && siteIds.includes(qp)) ? qp : (siteList[0]?.id || "");
       if (!initSite){ setMsg("你沒有任何可用場域（membership=0）。"); return; }
       sel.value = initSite;
 
-// ===== 月班表初始化 =====
-const monthInput = $("month_sel");
-if (monthInput){
-  const now = new Date();
-  monthInput.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
-}
-const shiftMonth = (delta) => {
-  if (!monthInput || !monthInput.value) return;
-  const [Y,M] = monthInput.value.split("-").map(x=>parseInt(x,10));
-  const dt = new Date(Y, (M-1)+delta, 1);
-  monthInput.value = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;
-};
-const btnPrev = $("btn_m_prev");
-const btnNext = $("btn_m_next");
-const btnReload = $("btn_m_reload");
-if (btnPrev) btnPrev.onclick = async () => { shiftMonth(-1); await refreshMonth(sel.value); };
-if (btnNext) btnNext.onclick = async () => { shiftMonth(1); await refreshMonth(sel.value); };
-if (btnReload) btnReload.onclick = async () => { await refreshMonth(sel.value); };
-if (monthInput) monthInput.onchange = async () => { await refreshMonth(sel.value); };
+      // 取得身分
+      const getRole = () => (me.memberships.find(x => x.site_id === sel.value)?.role) || "";
 
-// 初次載入月班表
-await refreshMonth(initSite);
-
-
-      const rerender = async () => await render(sel.value, me, siteList);
-
-      $("btn_reload").onclick = rerender;
-      $("date_sel").onchange = rerender;
-      sel.onchange = async () => { await refreshMonth(sel.value); await rerender(); };
-
-      $("btn_add_row").onclick = () => {
-        const tr = makeRow({ person_name:"", shift:"" }, true);
-        // 新列：沒有 origName，save 直接 upsert
-        tr.querySelector('[data-act="save"]').onclick = async () => {
-          try {
-            await saveRow(sel.value, $("date_sel").value, tr);
-            setMsg("已儲存", true);
-            await rerender();
-          } catch(e) {
-            setMsg(String(e?.message || e));
-          }
-        };
-        tr.querySelector('[data-act="del"]').onclick = () => tr.remove();
-        $("rows").prepend(tr);
+      // ===== 月班表初始化 =====
+      const monthInput = $("month_sel");
+      if (monthInput){
+        const now = new Date();
+        monthInput.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+      }
+      const shiftMonth = (delta) => {
+        if (!monthInput || !monthInput.value) return;
+        const [Y,M] = monthInput.value.split("-").map(x=>parseInt(x,10));
+        const dt = new Date(Y, (M-1)+delta, 1);
+        monthInput.value = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;
       };
+      
+      // 注意：這裡多傳了 siteList
+      const doRefreshMonth = async () => await refreshMonth(sel.value, getRole(), siteList);
 
-      $("btn_save_all").onclick = async () => {
-        const dateISO = $("date_sel").value;
-        const trs = Array.from(document.querySelectorAll("#rows tr"));
-        try {
-          for (const tr of trs){
-            await saveRow(sel.value, dateISO, tr);
-          }
-          setMsg("全部已儲存", true);
-          await rerender();
-        } catch(e) {
-          setMsg("儲存中斷：" + (e?.message || String(e)));
-        }
-      };
+      const btnPrev = $("btn_m_prev");
+      const btnNext = $("btn_m_next");
+      const btnReload = $("btn_m_reload");
+      if (btnPrev) btnPrev.onclick = async () => { shiftMonth(-1); await doRefreshMonth(); };
+      if (btnNext) btnNext.onclick = async () => { shiftMonth(1); await doRefreshMonth(); };
+      if (btnReload) btnReload.onclick = async () => { await doRefreshMonth(); };
+      if (monthInput) monthInput.onchange = async () => { await doRefreshMonth(); };
+      
+      // 新增：跳至今天按鈕
+      $("btn_jump_today").onclick = () => scrollToToday();
 
-      await rerender();
+      // 初次載入月班表
+      await doRefreshMonth();
+      
+      sel.onchange = async () => { await doRefreshMonth(); };
     }
 
     main();
