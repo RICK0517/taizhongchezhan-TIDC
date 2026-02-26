@@ -3,13 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>申請休假 / 個人資料</title>
+  <title>申請休假</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;background:#fafafa;padding-bottom:40px}
-    .bar{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#fff;border-bottom:1px solid #e8e8e8}
-    .card{background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:16px;margin:16px;box-shadow:0 2px 4px rgba(0,0,0,0.02)}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;background:#fafafa;padding:20px}
+    .card{background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 2px 4px rgba(0,0,0,0.02)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
     input,select,textarea,button{width:100%;box-sizing:border-box;padding:12px;border:1px solid #ddd;border-radius:8px;font-size:14px}
     textarea{min-height:80px;resize:vertical}
     button{background:#2563eb;color:#fff;font-weight:600;cursor:pointer;border:none}
@@ -17,271 +16,108 @@
     .msg{margin-top:10px;color:#d32f2f;font-size:14px;white-space:pre-wrap}
     .msg.ok{color:#2e7d32}
     .small{font-size:12px;color:#666;margin-bottom:4px;display:block}
-    
-    /* 統計區塊樣式 */
-    .stat-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(80px, 1fr));gap:8px;margin-top:10px}
-    .stat-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center}
-    .stat-val{font-size:18px;font-weight:700;color:#0f172a}
-    .stat-label{font-size:11px;color:#64748b}
-    
+    .section-title { font-weight:700; color:#333; border-left:4px solid #2563eb; padding-left:8px; margin: 0 0 15px 0; }
     .task{border-bottom:1px solid #eee;padding:12px 0}
-    .task:last-child{border-bottom:none}
     .pill{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;background:#eee;color:#333}
-    .pill.approved{background:#dcfce7;color:#166534}
-    .pill.rejected{background:#fee2e2;color:#991b1b}
-    
-    /* 入職日 Badge */
-    .info-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      background: #e0f2fe;
-      color: #0369a1;
-      font-weight: normal;
-    }
   </style>
 </head>
 <body>
-  <div class="bar">
-    <div style="font-weight:700">申請 / 個人資料</div>
-    <button style="width:auto;background:none;color:#666;padding:4px" onclick="location.href='./app.html'">回主控台</button>
-  </div>
-
-  <section class="card" style="border-top: 4px solid #2563eb;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-        <div style="font-weight:700;color:#333;">📊 我的假別統計 (已通過)</div>
-        <div id="seniority_tag" class="info-badge" style="display:none"></div>
-    </div>
-    
-    <div style="margin-top:12px;font-weight:600;font-size:13px;color:#666;border-bottom:1px solid #eee;padding-bottom:4px">本月統計</div>
-    <div id="stat_box_month" class="stat-grid">
-      <div class="small">載入中...</div>
-    </div>
-
-    <div style="margin-top:16px;font-weight:600;font-size:13px;color:#666;border-bottom:1px solid #eee;padding-bottom:4px">
-        本年度統計 (含特休額度)
-    </div>
-    <div id="stat_box_year" class="stat-grid">
-      <div class="small">載入中...</div>
-    </div>
-  </section>
 
   <section class="card">
+    <div class="section-title">1. 休假資訊</div>
     <div class="grid">
       <div>
-        <label class="small">場域</label>
-        <select id="site_sel"></select>
-      </div>
-      <div>
-        <label class="small">假別</label>
+        <label class="small">假別類型</label>
         <select id="leave_type">
+          <option value="特休">特休</option>
+          <option value="補休">補休</option>
+          <option value="公假">公假</option>
           <option value="事假">事假</option>
           <option value="病假">病假</option>
           <option value="生理假">生理假</option>
+          <option value="家庭照顧假">家庭照顧假</option>
+          <option value="產假">產假</option>
+          <option value="陪產假">陪產假</option>
+          <option value="婚假">婚假</option>
           <option value="喪假">喪假</option>
-          <option value="特休">特休</option>
+          <option value="其他">其他 (請在備註說明)</option>
         </select>
       </div>
-    </div>
-    <div style="height:10px"></div>
-    <div class="grid">
-      <div><label class="small">開始日期</label><input id="date_from" type="date"></div>
-      <div><label class="small">結束日期 (同天可免填)</label><input id="date_to" type="date"></div>
-    </div>
-    
-    <div style="height:10px"></div>
-    <label class="small">證明照片 (選填)</label>
-    <input id="photo" type="file" accept="image/*">
-    
-    <div style="height:10px"></div>
-    <label class="small">備註 / 原因</label>
-    <textarea id="note" placeholder="請輸入請假事由..."></textarea>
+      </div>
 
-    <div style="height:16px"></div>
-    <button id="btn_submit">送出申請</button>
-    <div id="msg" class="msg"></div>
+    <div class="grid" style="margin-top:12px">
+      <div><label class="small">開始時間</label><input id="date_from" type="datetime-local"></div>
+      <div><label class="small">結束時間</label><input id="date_to" type="datetime-local"></div>
+    </div>
+    
+    <div style="margin-top:12px">
+        <label class="small">請假事由 / 備註</label>
+        <textarea id="note" placeholder="請輸入請假原因..."></textarea>
+    </div>
+
+    <div style="margin-top:12px">
+        <label class="small">證明照片 (選填)</label>
+        <input id="photo" type="file" accept="image/*">
+    </div>
+
+    <div style="margin-top:20px">
+        <button id="btn_submit">送出申請</button>
+        <div id="msg" class="msg"></div>
+    </div>
   </section>
 
   <section class="card">
-    <div style="font-weight:700;margin-bottom:10px">申請紀錄</div>
+    <div style="font-weight:700;margin-bottom:10px">我的近期申請</div>
     <div id="my_box"></div>
   </section>
 
 <script>
   const $ = id => document.getElementById(id);
-  // 請確認這裡的 URL 和 Key 是正確的
   const sb = supabase.createClient("https://whbllncddoqbwukstxel.supabase.co", "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2");
-  
+  const params = new URLSearchParams(window.location.search);
+  const currentSiteId = params.get("site_id");
+
   function setMsg(t, ok=false){ const el=$("msg"); el.textContent=t; el.className=ok?"msg ok":"msg"; }
-
-  // === 特休計算邏輯 (依照圖片規則) ===
-  function calcAnnualLeaveDays(entryDateStr) {
-    if (!entryDateStr) return 0;
-    
-    const entry = new Date(entryDateStr);
-    const now = new Date(); // 以當下時間計算
-    
-    // 計算完整年資
-    let years = now.getFullYear() - entry.getFullYear();
-    const m = now.getMonth() - entry.getMonth();
-    // 若月份不滿或同月份日期未到，年資減一
-    if (m < 0 || (m === 0 && now.getDate() < entry.getDate())) {
-        years--;
-    }
-    
-    // 計算總月數 (用於未滿一年判定)
-    const totalMonths = (now.getFullYear() - entry.getFullYear()) * 12 + (now.getMonth() - entry.getMonth());
-
-    // 依照圖片規則判斷
-    if (years >= 25) return 30; // 滿25年
-    if (years >= 24) return 30; // 滿24年
-    if (years >= 10) return 16 + (years - 10); // 滿10年16天，每多一年加一天 (10->16, 11->17... 23->29)
-    
-    // 未滿10年的列表 (依照圖片)
-    if (years >= 9) return 15;
-    if (years >= 8) return 15;
-    if (years >= 7) return 15;
-    if (years >= 6) return 15;
-    if (years >= 5) return 15;
-    if (years >= 4) return 14; // 圖片：滿4年 14天
-    if (years >= 3) return 14; // 圖片：滿3年 14天
-    if (years >= 2) return 10; // 圖片：滿2年 10天
-    if (years >= 1) return 7;  // 圖片：滿1年 7天
-    
-    if (totalMonths >= 6) return 3; // 圖片：滿6個月 3天
-    
-    return 0; // 未滿6個月
+  function toLocalISO(dt) {
+      const tz = dt.getTimezoneOffset() * 60000;
+      return new Date(dt.getTime() - tz).toISOString().slice(0, 16);
   }
 
-  // === 核心：渲染統計 (分月與年) ===
-  async function renderStats(siteId, uid) {
-    const now = new Date();
-    // 1. 本月第一天
-    const firstDayMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
-    // 2. 今年第一天
-    const firstDayYear = new Date(now.getFullYear(), 0, 1).toISOString().slice(0,10);
-
-    // 平行查詢：本月紀錄、本年紀錄、個人檔案(查入職日)
-    const [resMonth, resYear, resProfile] = await Promise.all([
-        sb.from("leave_requests")
-          .select("leave_type").eq("site_id", siteId).eq("requester_id", uid).eq("status", "approved")
-          .gte("date_from", firstDayMonth),
-        
-        sb.from("leave_requests")
-          .select("leave_type").eq("site_id", siteId).eq("requester_id", uid).eq("status", "approved")
-          .gte("date_from", firstDayYear),
-          
-        sb.from("personal_profiles").select("entry_date").eq("user_id", uid).maybeSingle()
-    ]);
-
-    // A. 處理入職日與特休額度
-    let maxAnnual = 0;
-    if (resProfile.data && resProfile.data.entry_date) {
-        const ed = resProfile.data.entry_date;
-        maxAnnual = calcAnnualLeaveDays(ed);
-        const tag = $("seniority_tag");
-        tag.style.display = "block";
-        tag.innerHTML = `入職日：${ed} <br> 特休額度：${maxAnnual} 天`;
-    } else {
-        const tag = $("seniority_tag");
-        tag.style.display = "block";
-        tag.style.background = "#eee";
-        tag.style.color = "#666";
-        tag.textContent = "未設定入職日 (請至人事資料設定)";
-    }
-
-    // B. 計算統計次數 helper
-    const calc = (rows) => {
-        const c = { "事假":0, "病假":0, "生理假":0, "特休":0, "喪假":0 };
-        (rows||[]).forEach(r => { if(c[r.leave_type]!==undefined) c[r.leave_type]++; });
-        return c;
-    };
-
-    const monthCounts = calc(resMonth.data);
-    const yearCounts = calc(resYear.data);
-
-    // C. 渲染 HTML
-    // 月統計
-    $("stat_box_month").innerHTML = Object.entries(monthCounts).map(([k,v]) => `
-      <div class="stat-item">
-        <div class="stat-label">${k}</div>
-        <div class="stat-val">${v}</div>
-      </div>
-    `).join("");
-
-    // 年統計 (特休顯示已用/總額)
-    $("stat_box_year").innerHTML = Object.entries(yearCounts).map(([k,v]) => {
-        let displayVal = v;
-        if (k === "特休") {
-            const color = v > maxAnnual ? "#d32f2f" : "#15803d"; // 超過變紅，未超過綠
-            displayVal = `<span style="color:${color}">${v}</span> <span style="font-size:13px;color:#999">/ ${maxAnnual}</span>`;
-        }
-        return `
-          <div class="stat-item">
-            <div class="stat-label">${k}</div>
-            <div class="stat-val">${displayVal}</div>
-          </div>
-        `;
-    }).join("");
-  }
-
-  // 2. 渲染申請列表 (原本功能)
-  async function renderMy(siteId, uid){
+  async function renderMy(uid){
+    if(!currentSiteId) return;
     const { data: rows } = await sb.from("leave_requests")
-      .select("*").eq("site_id", siteId).eq("requester_id", uid)
-      .order("created_at", {ascending:false}).limit(20);
+      .select("*").eq("site_id", currentSiteId).eq("requester_id", uid)
+      .order("created_at", {ascending:false}).limit(10);
       
     $("my_box").innerHTML = (rows||[]).map(r => {
-      const dTo = r.date_to || r.date_from;
-      let imgTag = "";
-      if(r.photo_path){
-        const {data} = sb.storage.from('leave-photos').getPublicUrl(r.photo_path);
-        imgTag = `<div style="margin-top:4px"><a href="${data.publicUrl}" target="_blank" style="font-size:12px;color:#2563eb">查看證明圖</a></div>`;
-      }
+      const t1 = r.date_from ? r.date_from.replace("T", " ") : "";
+      const t2 = r.date_to ? r.date_to.replace("T", " ") : "";
+      // 若主管尚未填寫，total_duration 可能為空
       return `
       <div class="task">
         <div style="display:flex;justify-content:space-between">
           <strong>${r.leave_type}</strong>
-          <span class="pill ${r.status}">${r.status==="pending"?"審核中":r.status==="approved"?"已通過":"未通過"}</span>
+          <span class="pill ${r.status}">${r.status}</span>
         </div>
-        <div class="small">${r.date_from}${dTo!==r.date_from?" ~ "+dTo:""}</div>
-        ${r.note ? `<div style="font-size:13px;margin-top:4px">${r.note}</div>` : ""}
-        ${imgTag}
+        <div class="small" style="margin-top:4px">${t1} ~ ${t2}</div>
+        <div class="small" style="color:#666">${r.total_duration ? "核定: "+r.total_duration : "尚未核定時數"}</div>
       </div>`;
     }).join("") || "<div class='small'>無紀錄</div>";
-    
-    // 同步更新統計 (重要：每次渲染列表也重算統計)
-    await renderStats(siteId, uid);
   }
 
   (async () => {
     const {data:{session}} = await sb.auth.getSession();
-    if(!session) { location.href="./index.html"; return; }
+    if(!session || !currentSiteId) { document.body.innerHTML="請先登入並選擇場域"; return; }
     const uid = session.user.id;
     
-    // 讀取場域
-    const {data: mems} = await sb.from("site_memberships").select("site_id").eq("user_id", uid).eq("is_active", true);
-    if(!mems?.length){ alert("無場域權限"); return; }
-    const siteIds = mems.map(m=>m.site_id);
-    const {data: sites} = await sb.from("sites").select("id,name").in("id", siteIds);
-    
-    const sel = $("site_sel");
-    sites.forEach(s => {
-      const opt = document.createElement("option"); opt.value=s.id; opt.textContent=s.name; sel.appendChild(opt);
-    });
-    
-    // 初始化
-    $("date_from").value = new Date().toISOString().slice(0,10);
-    renderMy(sel.value, uid);
-    sel.onchange = () => renderMy(sel.value, uid);
+    $("date_from").value = toLocalISO(new Date());
+    $("date_to").value = toLocalISO(new Date());
+    renderMy(uid);
 
-    // 提交邏輯 (含圖片上傳)
     $("btn_submit").onclick = async () => {
       setMsg("處理中...");
       const file = $("photo").files[0];
       let photo_path = null;
-      
       if(file){
         const ext = file.name.split(".").pop();
         const path = `${uid}/${Date.now()}.${ext}`;
@@ -291,16 +127,20 @@
       }
 
       const {error} = await sb.from("leave_requests").insert({
-        site_id: sel.value, requester_id: uid, leave_type: $("leave_type").value,
-        date_from: $("date_from").value, date_to: $("date_to").value||$("date_from").value,
-        note: $("note").value||null, photo_path
+        site_id: currentSiteId, 
+        requester_id: uid, 
+        leave_type: $("leave_type").value,
+        date_from: $("date_from").value, 
+        date_to: $("date_to").value,
+        note: $("note").value || null,
+        photo_path
       });
 
       if(error) setMsg(error.message);
       else {
-        setMsg("申請成功", true);
+        setMsg("申請成功！", true);
         $("note").value=""; $("photo").value="";
-        renderMy(sel.value, uid);
+        renderMy(uid);
       }
     };
   })();

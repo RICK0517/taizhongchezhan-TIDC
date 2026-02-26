@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>人員對照</title>
   <style>
-    body{font-family:system-ui,Segoe UI,Arial;max-width:980px;margin:28px auto;padding:0 14px}
+    body{font-family:system-ui,Segoe UI,Arial;max-width:980px;margin:20px auto;padding:0 14px}
     .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
     .card{border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px}
-    input,select,button{padding:10px}
-    button{font-weight:700;cursor:pointer}
+    select,button{padding:8px 12px;border:1px solid #ddd;border-radius:6px}
+    button{font-weight:700;cursor:pointer;background:#f0f0f0;}
+    button:hover{background:#e0e0e0;}
     table{width:100%;border-collapse:collapse;margin-top:10px}
     th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;vertical-align:top}
     th{font-size:13px;opacity:.75}
@@ -17,6 +18,8 @@
     .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
     .ok{color:#0a7a2f}
     .pill{display:inline-block;padding:2px 8px;border:1px solid #ddd;border-radius:999px;font-size:12px;opacity:.8}
+    /* 強調當前場域標題 */
+    .site-title { font-size: 1.2rem; font-weight: bold; color: #333; }
   </style>
 </head>
 <body>
@@ -26,16 +29,11 @@
       <div class="small" id="site_line">讀取中…</div>
       <div class="small" id="dbg" style="margin-top:6px"></div>
     </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <select id="site_sel" style="min-width:240px"></select>
-      <button id="btn_back">返回主控台</button>
-      <button id="btn_logout">登出</button>
-    </div>
   </div>
 
   <section class="card">
     <div class="small">
-      目的：把「班表姓名」連到「系統帳號」。完成後，你可以用這張對照表把班表上的人，對應到 profiles / membership 的 user_id（例如之後做已到班、已完成、通知等）。
+      目的：把「班表姓名」連到「系統帳號」。完成後，可以用這張對照表把班表上的人，對應到 user_id (用於通知、統計等功能)。
     </div>
     <div class="small" style="margin-top:8px">
       顯示來源：目前場域的班表姓名（取近 30 天 + 未來 30 天，去重）。
@@ -62,78 +60,49 @@
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const $ = (id) => document.getElementById(id);
-    function dbg(t){ $("dbg").textContent = t || ""; }
     function setMsg(t, ok=false){ const el=$("msg"); el.textContent=t||""; el.className = ok ? "msg ok" : "msg"; }
     function escapeHtml(s){ return (s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     function isManagerRole(role){ return role === "engineer" || role === "supervisor"; }
-
-    function getQueryParam(k){
-      const u = new URL(location.href);
-      return u.searchParams.get(k);
-    }
     function toISODateLocal(d){
       const tz = d.getTimezoneOffset() * 60000;
       return new Date(d.getTime() - tz).toISOString().slice(0,10);
     }
 
-    async function requireSession(){
-      const { data, error } = await supabase.auth.getSession();
-      if (error) return null;
-      if (!data.session) {
-        location.href = "./index.html";
-        return null;
-      }
-      return data.session;
-    }
+    // 從網址參數取得 site_id
+    const params = new URLSearchParams(window.location.search);
+    const currentSiteId = params.get("site_id");
 
     async function loadMe(){
-      const sess = await requireSession();
-      if (!sess) return null;
-      const uid = sess.user.id;
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) { location.href = "./index.html"; return null; }
+      const uid = session.user.id;
 
-      const p = await supabase.from("profiles")
-        .select("username,display_name")
-        .eq("user_id", uid).single();
-
+      // 檢查使用者在此場域的權限
       const m = await supabase.from("site_memberships")
-        .select("site_id,role,is_active,user_id")
-        .eq("user_id", uid).eq("is_active", true);
+        .select("role, is_active")
+        .eq("user_id", uid)
+        .eq("site_id", currentSiteId)
+        .eq("is_active", true)
+        .maybeSingle();
 
-      if (p.error) throw new Error("profiles：" + p.error.message);
-      if (m.error) throw new Error("membership：" + m.error.message);
-
-      return { uid, username: p.data.username, name: p.data.display_name || "", memberships: m.data || [] };
+      if (!m) throw new Error("您不屬於此場域或帳號未啟用");
+      return { uid, role: m.data.role };
     }
 
-    async function loadSites(siteIds){
-      const s = await supabase.from("sites").select("id,code,name");
-      if (s.error) throw new Error("sites：" + s.error.message);
-      const map = {};
-      for (const it of s.data) map[it.id] = it;
-      return siteIds.map(id => map[id]).filter(Boolean);
+    async function getSiteInfo(siteId){
+      const { data } = await supabase.from("sites").select("name, code").eq("id", siteId).single();
+      return data;
     }
 
     async function getSitePeople(siteId){
-      const m = await supabase.from("site_memberships")
-        .select("user_id,role,is_active")
-        .eq("site_id", siteId).eq("is_active", true);
-
-      if (m.error) throw new Error("site_memberships：" + m.error.message);
+      // 取得該場域所有成員
+      const m = await supabase.from("site_memberships").select("user_id").eq("site_id", siteId).eq("is_active", true);
       const userIds = (m.data || []).map(x => x.user_id);
       if (!userIds.length) return [];
 
-      const p = await supabase.from("profiles")
-        .select("user_id,username,display_name")
-        .in("user_id", userIds);
-
-      if (p.error) {
-        return userIds.map(uid => ({ user_id: uid, label: uid }));
-      }
-
+      const p = await supabase.from("profiles").select("user_id,username,display_name").in("user_id", userIds);
       const map = {};
-      for (const it of (p.data || [])) {
-        map[it.user_id] = (it.display_name || it.username || it.user_id);
-      }
+      (p.data || []).forEach(it => { map[it.user_id] = (it.display_name || it.username || it.user_id); });
       return userIds.map(uid => ({ user_id: uid, label: map[uid] || uid }));
     }
 
@@ -148,19 +117,15 @@
         .eq("site_id", siteId)
         .gte("work_date", from)
         .lte("work_date", to);
-
-      if (q.error) throw new Error("site_schedules：" + q.error.message);
+        
       const set = new Set((q.data || []).map(x => String(x.person_name || "").trim()).filter(Boolean));
       return Array.from(set).sort((a,b) => a.localeCompare(b, "zh-Hant"));
     }
 
     async function getMappings(siteId){
-      const q = await supabase.from("site_person_links")
-        .select("person_name,user_id")
-        .eq("site_id", siteId);
-      if (q.error) throw new Error("site_person_links：" + q.error.message);
+      const q = await supabase.from("site_person_links").select("person_name,user_id").eq("site_id", siteId);
       const map = {};
-      for (const r of (q.data || [])) map[r.person_name] = r.user_id;
+      (q.data || []).forEach(r => map[r.person_name] = r.user_id);
       return map;
     }
 
@@ -171,151 +136,95 @@
     }
 
     async function deleteMapping(siteId, personName){
-      const del = await supabase.from("site_person_links")
-        .delete()
-        .eq("site_id", siteId)
-        .eq("person_name", personName);
+      const del = await supabase.from("site_person_links").delete().eq("site_id", siteId).eq("person_name", personName);
       if (del.error) throw new Error(del.error.message);
     }
 
-    async function render(siteId, me){
+    async function render(){
+      if (!currentSiteId) { setMsg("網址參數缺少 site_id"); return; }
       setMsg("讀取中…");
-      const rowsEl = $("rows");
-      rowsEl.innerHTML = "";
+      const rowsEl = $("rows"); rowsEl.innerHTML = "";
 
-      // 權限：只有主管/工程師能操作；一般員工可看（看你 RLS 怎麼設）
-      const roleCur = (me.memberships.find(x => x.site_id === siteId)?.role) || "";
-      const canEdit = isManagerRole(roleCur);
-
-      const sites = await loadSites(me.memberships.map(x => x.site_id));
-      const s = sites.find(x => x.id === siteId);
-      $("site_line").textContent = s ? `目前場域：${s.name} (${s.code})｜你的身分：${roleCur}` : `目前場域：${siteId}｜你的身分：${roleCur}`;
-
-      const people = await getSitePeople(siteId);
-      const nameList = await getScheduleNames(siteId);
-      const mapped = await getMappings(siteId);
-
-      if (!nameList.length){
-        setMsg("近 30 天與未來 30 天沒有班表姓名資料（請先匯入班表）。");
-        return;
-      }
-
-      for (const personName of nameList){
-        const tr = document.createElement("tr");
-
-        const tdName = document.createElement("td");
-        tdName.innerHTML = `<strong>${escapeHtml(personName)}</strong>` + (mapped[personName] ? ` <span class="pill">已連結</span>` : "");
-        tr.appendChild(tdName);
-
-        const tdSel = document.createElement("td");
-        const sel = document.createElement("select");
-        sel.style.width = "100%";
-        sel.disabled = !canEdit;
-
-        const opt0 = document.createElement("option");
-        opt0.value = "";
-        opt0.textContent = "（不連結）";
-        sel.appendChild(opt0);
-
-        for (const p of people){
-          const opt = document.createElement("option");
-          opt.value = p.user_id;
-          opt.textContent = p.label;
-          sel.appendChild(opt);
-        }
-
-        sel.value = mapped[personName] || "";
-        tdSel.appendChild(sel);
-        tr.appendChild(tdSel);
-
-        const tdAct = document.createElement("td");
-        if (canEdit){
-          const btnSave = document.createElement("button");
-          btnSave.textContent = "儲存";
-          btnSave.style.marginRight = "8px";
-
-          const btnClear = document.createElement("button");
-          btnClear.textContent = "清除";
-
-          btnSave.onclick = async () => {
-            try{
-              const uid = sel.value || null;
-              if (!uid){
-                await deleteMapping(siteId, personName);
-              } else {
-                await upsertMapping(siteId, personName, uid);
-              }
-              setMsg("已更新：" + personName, true);
-              await render(siteId, me);
-            }catch(e){
-              setMsg("更新失敗：" + (e?.message || String(e)));
-            }
-          };
-
-          btnClear.onclick = async () => {
-            try{
-              sel.value = "";
-              await deleteMapping(siteId, personName);
-              setMsg("已清除：" + personName, true);
-              await render(siteId, me);
-            }catch(e){
-              setMsg("清除失敗：" + (e?.message || String(e)));
-            }
-          };
-
-          tdAct.appendChild(btnSave);
-          tdAct.appendChild(btnClear);
-        } else {
-          tdAct.innerHTML = `<span class="small">只有主管/工程師可編輯</span>`;
-        }
-        tr.appendChild(tdAct);
-
-        rowsEl.appendChild(tr);
-      }
-
-      setMsg(canEdit ? "可編輯：選擇對應帳號後按儲存。" : "你可查看對照表，編輯需主管/工程師。", true);
-    }
-
-    async function main(){
-      $("btn_back").onclick = () => location.href = "./app.html";
-      $("btn_logout").onclick = async () => { await supabase.auth.signOut(); location.href = "./index.html"; };
-
-      let me;
       try {
-        me = await loadMe();
+          const { uid, role } = await loadMe(); // 權限檢查
+          const siteInfo = await getSiteInfo(currentSiteId);
+          $("site_line").textContent = `場域：${siteInfo?.name || currentSiteId} ｜ 您的身分：${role}`;
+
+          const canEdit = isManagerRole(role);
+          const people = await getSitePeople(currentSiteId);
+          const nameList = await getScheduleNames(currentSiteId);
+          const mapped = await getMappings(currentSiteId);
+
+          if (!nameList.length){
+            setMsg("近期班表無姓名資料（請先匯入班表）。");
+            return;
+          }
+
+          for (const personName of nameList){
+            const tr = document.createElement("tr");
+
+            const tdName = document.createElement("td");
+            tdName.innerHTML = `<strong>${escapeHtml(personName)}</strong>` + (mapped[personName] ? ` <span class="pill">已連結</span>` : "");
+            tr.appendChild(tdName);
+
+            const tdSel = document.createElement("td");
+            const sel = document.createElement("select");
+            sel.style.width = "100%";
+            sel.disabled = !canEdit;
+
+            const opt0 = document.createElement("option");
+            opt0.value = ""; opt0.textContent = "（不連結）"; sel.appendChild(opt0);
+
+            for (const p of people){
+              const opt = document.createElement("option");
+              opt.value = p.user_id; opt.textContent = p.label; sel.appendChild(opt);
+            }
+
+            sel.value = mapped[personName] || "";
+            tdSel.appendChild(sel);
+            tr.appendChild(tdSel);
+
+            const tdAct = document.createElement("td");
+            if (canEdit){
+              const btnSave = document.createElement("button");
+              btnSave.textContent = "儲存"; btnSave.style.marginRight = "8px"; btnSave.style.background = "#2196f3"; btnSave.style.color="white"; btnSave.style.border="none";
+
+              const btnClear = document.createElement("button");
+              btnClear.textContent = "清除";
+
+              btnSave.onclick = async () => {
+                try{
+                  const uid = sel.value || null;
+                  if (!uid) await deleteMapping(currentSiteId, personName);
+                  else await upsertMapping(currentSiteId, personName, uid);
+                  setMsg("已更新：" + personName, true);
+                  await render();
+                }catch(e){ setMsg("更新失敗：" + (e?.message || String(e))); }
+              };
+
+              btnClear.onclick = async () => {
+                try{
+                  sel.value = "";
+                  await deleteMapping(currentSiteId, personName);
+                  setMsg("已清除：" + personName, true);
+                  await render();
+                }catch(e){ setMsg("清除失敗：" + (e?.message || String(e))); }
+              };
+
+              tdAct.appendChild(btnSave); tdAct.appendChild(btnClear);
+            } else {
+              tdAct.innerHTML = `<span class="small">僅供檢視</span>`;
+            }
+            tr.appendChild(tdAct);
+            rowsEl.appendChild(tr);
+          }
+          setMsg(canEdit ? "載入完成" : "唯讀模式", true);
       } catch(e) {
-        setMsg("載入使用者資料失敗：" + (e?.message || String(e)));
-        return;
+          setMsg("錯誤：" + e.message);
       }
-
-      const siteIds = me.memberships.map(x => x.site_id);
-      const sites = await loadSites(siteIds);
-
-      const sel = $("site_sel");
-      sel.innerHTML = "";
-      for (const s of sites){
-        const opt = document.createElement("option");
-        opt.value = s.id;
-        opt.textContent = `${s.name} (${s.code})`;
-        sel.appendChild(opt);
-      }
-
-      const qp = getQueryParam("site_id");
-      const initial = (qp && siteIds.includes(qp)) ? qp : (sites[0]?.id || "");
-      if (!initial){
-        setMsg("你沒有任何可用場域（membership=0）。");
-        return;
-      }
-      sel.value = initial;
-
-      await render(sel.value, me);
-
-      sel.onchange = async () => {
-        await render(sel.value, me);
-      };
     }
 
-    main();
+    render();
   </script>
 </body>
 </html>

@@ -5,101 +5,49 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>假別統計</title>
   <style>
-    body{font-family:system-ui,Segoe UI,Arial;max-width:980px;margin:28px auto;padding:0 14px}
-    .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-    .card{border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px}
-    input,select,button{padding:10px}
-    button{font-weight:700;cursor:pointer}
-    .small{opacity:.75;font-size:13px;line-height:1.4}
-    .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
+    body{font-family:system-ui,Segoe UI,Arial;margin:0;padding:20px;background:#fafafa}
+    .card{border:1px solid #ddd;border-radius:10px;padding:15px;margin-bottom:15px;background:#fff}
+    .bar{margin-bottom:15px}
+    input,button{padding:10px;border:1px solid #ddd;border-radius:6px}
+    button{background:#2563eb;color:#fff;font-weight:700;cursor:pointer;border:none}
     
-    /* 表格樣式 */
     table{width:100%;border-collapse:collapse;margin-top:10px}
-    th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;vertical-align:middle;font-size:14px}
-    th{background:#f9f9f9;font-weight:600;white-space:nowrap}
-    tr:hover td{background:#fafafa}
-
-    /* 統計卡片樣式 (個人用) */
-    .stat-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-      gap: 12px;
-      margin-top: 12px;
-    }
-    .stat-box {
-      border: 1px solid #eee;
-      border-radius: 8px;
-      padding: 12px;
-      text-align: center;
-      background: #fff;
-    }
-    .stat-num {
-      font-size: 24px;
-      font-weight: 700;
-      color: #2563eb;
-      margin-top: 4px;
-    }
-    .stat-label {
-      font-size: 13px;
-      color: #666;
-    }
-    .shift-tag {
-        display:inline-block;
-        padding:2px 6px;
-        border-radius:4px;
-        font-size:12px;
-        background:#eee;
-        margin-right:4px;
-    }
+    th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;font-size:14px}
+    th{background:#f9f9f9}
+    
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-top: 10px; }
+    .stat-box { border: 1px solid #eee; border-radius: 8px; padding: 10px; text-align: center; background: #fff; }
+    .stat-num { font-size: 20px; font-weight: 700; color: #2563eb; }
+    .small { font-size: 13px; color: #666; }
   </style>
 </head>
 <body>
   <div class="bar">
-    <div>
-      <h1 style="margin:0">假別統計</h1>
-      <div class="small" id="site_line">讀取中…</div>
-      <div class="small" id="role_line" style="margin-top:6px"></div>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <select id="site_sel" style="min-width:200px"></select>
-      <button id="btn_back">回主控台</button>
-      <button id="btn_logout">登出</button>
-    </div>
+    <h1 style="margin:0">假別統計</h1>
   </div>
 
   <section class="card">
-    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:#f8f9fa;padding:10px;border-radius:8px">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <label class="small">開始日期 <input type="date" id="date_start"></label>
       <label class="small">結束日期 <input type="date" id="date_end"></label>
-      <button id="btn_search" style="width:auto;padding:8px 16px;">查詢</button>
+      <button id="btn_search">查詢</button>
     </div>
-    <div id="msg" class="msg"></div>
+    <div id="msg" style="margin-top:10px;color:red"></div>
   </section>
 
   <section class="card" id="view_employee" style="display:none">
-    <h2 style="margin:0">我的統計</h2>
-    <div class="small" style="margin-top:6px" id="emp_name_display"></div>
+    <h2 style="margin:0;font-size:1.1rem">我的統計</h2>
+    <div class="small" style="margin-top:4px" id="emp_name_display"></div>
     <div class="stat-grid" id="emp_stats_box"></div>
-    <div style="margin-top:20px">
-        <h3 style="font-size:16px;margin-bottom:8px">詳細明細</h3>
-        <div id="emp_detail_list"></div>
-    </div>
   </section>
 
   <section class="card" id="view_manager" style="display:none">
-    <h2 style="margin:0">全員統計表</h2>
-    <div class="small" style="margin-top:6px">統計對象：該區間內有出現過上述假別的所有人員。</div>
+    <h2 style="margin:0;font-size:1.1rem">全員統計表</h2>
     <div style="overflow-x:auto">
       <table id="mgr_table">
         <thead>
             <tr>
-                <th>姓名</th>
-                <th>事假</th>
-                <th>病假</th>
-                <th>喪假</th>
-                <th>特休</th>
-                <th>生理假</th>
-                <th>合計</th>
+                <th>姓名</th><th>事假</th><th>病假</th><th>喪假</th><th>特休</th><th>生理假</th><th>合計</th>
             </tr>
         </thead>
         <tbody id="mgr_tbody"></tbody>
@@ -107,232 +55,91 @@
     </div>
   </section>
 
-  <script type="module">
-    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const sb = createClient("https://whbllncddoqbwukstxel.supabase.co", "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2");
 
-    const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(window.location.search);
+const currentSiteId = params.get("site_id");
+const TARGET_SHIFTS = ["事假", "病假", "喪假", "特休", "生理假"];
 
-    const $ = (id) => document.getElementById(id);
-    function setMsg(t, ok=false){ const el=$("msg"); el.textContent=t||""; el.className = ok ? "msg ok" : "msg"; }
-    function isManagerRole(role){ return role === "engineer" || role === "supervisor"; }
-    function roleLabel(role){ if (role==="engineer") return "工程師"; if (role==="supervisor") return "主管"; if (role==="employee") return "員工"; return role||"未知"; }
+const today = new Date();
+$("date_start").value = `${today.getFullYear()}-01-01`;
+$("date_end").value = `${today.getFullYear()}-12-31`;
 
-    // 設定日期預設值 (今年 1/1 ~ 12/31)
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    $("date_start").value = `${yyyy}-01-01`;
-    $("date_end").value = `${yyyy}-12-31`;
+async function main(){
+    const {data:{session}} = await sb.auth.getSession();
+    if(!session || !currentSiteId) return;
+    const uid = session.user.id;
+    
+    // 取得身分
+    const {data:mem} = await sb.from("site_memberships").select("role").eq("user_id",uid).eq("site_id",currentSiteId).maybeSingle();
+    const role = mem ? mem.role : "";
+    
+    $("btn_search").onclick = () => doSearch(uid, role);
+    doSearch(uid, role); // 自動執行一次
+}
 
-    // 關注的假別關鍵字
-    const TARGET_SHIFTS = ["事假", "病假", "喪假", "特休", "生理假"];
-
-    async function requireSession(){
-      const { data, error } = await supabase.auth.getSession();
-      if (error) return null;
-      if (!data.session) { location.href = "./index.html"; return null; }
-      return data.session;
-    }
-
-    async function loadMe(){
-      const sess = await requireSession();
-      if (!sess) return null;
-      const uid = sess.user.id;
-
-      const p = await supabase.from("profiles").select("username,display_name").eq("user_id", uid).single();
-      const m = await supabase.from("site_memberships").select("site_id,role,is_active").eq("user_id", uid).eq("is_active", true);
-      return { uid, username: p.data?.username, name: p.data?.display_name||"", memberships: m.data||[] };
-    }
-
-    async function loadSites(siteIds){
-      const s = await supabase.from("sites").select("id,code,name").in("id", siteIds);
-      return s.data || [];
-    }
-
-    // 取得我連結的班表姓名 (可能有多個，通常是一個)
-    async function getMyLinkNames(siteId, uid){
-        const { data } = await supabase.from("site_person_links")
-            .select("person_name")
-            .eq("site_id", siteId)
-            .eq("user_id", uid);
-        return (data || []).map(x => x.person_name);
-    }
-
-    // 核心統計邏輯
-    async function fetchStats(siteId, dStart, dEnd, targetNames = null){
-        let q = supabase.from("site_schedules")
-            .select("work_date, person_name, shift")
-            .eq("site_id", siteId)
-            .gte("work_date", dStart)
-            .lte("work_date", dEnd)
-            .in("shift", TARGET_SHIFTS); // 只抓這些假別
-
-        if(targetNames && targetNames.length > 0){
-            q = q.in("person_name", targetNames);
-        }
-
-        const { data, error } = await q;
-        if(error) throw error;
-        return data || [];
-    }
-
-    async function render(siteId, me, roleCur){
-        setMsg("統計中...", false);
-        $("view_employee").style.display = "none";
-        $("view_manager").style.display = "none";
-
-        const dStart = $("date_start").value;
-        const dEnd = $("date_end").value;
+async function doSearch(uid, role){
+    $("msg").textContent = "查詢中...";
+    const start = $("date_start").value;
+    const end = $("date_end").value;
+    
+    let q = sb.from("site_schedules").select("person_name, shift")
+        .eq("site_id", currentSiteId)
+        .gte("work_date", start).lte("work_date", end)
+        .in("shift", TARGET_SHIFTS);
         
-        try {
-            if(isManagerRole(roleCur)){
-                // === 主管模式：看所有人 ===
-                $("view_manager").style.display = "block";
-                const rows = await fetchStats(siteId, dStart, dEnd, null); // null 代表不限人名
-                
-                // 聚合數據
-                // map 結構: { "王小明": { "事假": 2, "病假": 1 ... }, ... }
-                const map = {};
-                
-                rows.forEach(r => {
-                    const name = r.person_name;
-                    const shift = r.shift;
-                    if(!map[name]) {
-                        map[name] = { total: 0 };
-                        TARGET_SHIFTS.forEach(k => map[name][k] = 0);
-                    }
-                    if(map[name][shift] !== undefined) {
-                        map[name][shift]++;
-                        map[name].total++;
-                    }
-                });
-
-                const tbody = $("mgr_tbody");
-                tbody.innerHTML = "";
-                const names = Object.keys(map).sort((a,b)=>a.localeCompare(b,"zh-Hant"));
-
-                if(names.length === 0){
-                    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#888;">此區間無請假紀錄</td></tr>`;
-                }
-
-                names.forEach(name => {
-                    const d = map[name];
-                    const tr = document.createElement("tr");
-                    tr.innerHTML = `
-                        <td style="font-weight:700">${name}</td>
-                        <td>${d["事假"] || "-"}</td>
-                        <td>${d["病假"] || "-"}</td>
-                        <td>${d["喪假"] || "-"}</td>
-                        <td>${d["特休"] || "-"}</td>
-                        <td>${d["生理假"] || "-"}</td>
-                        <td style="font-weight:700;color:#d32f2f">${d.total}</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-
-            } else {
-                // === 員工模式：只看自己 ===
-                $("view_employee").style.display = "block";
-                
-                // 1. 先找 mapping
-                const myNames = await getMyLinkNames(siteId, me.uid);
-                
-                if(myNames.length === 0){
-                    $("emp_name_display").textContent = "注意：你尚未在「人員對照」中連結你的班表姓名，因此無法讀取統計。";
-                    $("emp_stats_box").innerHTML = "";
-                    setMsg("查無對應姓名", false);
-                    return;
-                }
-                
-                $("emp_name_display").textContent = `統計對象：${myNames.join("、")}`;
-
-                // 2. 搜尋資料
-                const rows = await fetchStats(siteId, dStart, dEnd, myNames);
-
-                // 3. 統計
-                const counts = {};
-                TARGET_SHIFTS.forEach(k => counts[k] = 0);
-                
-                rows.forEach(r => {
-                    if(counts[r.shift] !== undefined) counts[r.shift]++;
-                });
-
-                // 4. 渲染卡片
-                const box = $("emp_stats_box");
-                box.innerHTML = TARGET_SHIFTS.map(k => `
-                    <div class="stat-box">
-                        <div class="stat-label">${k}</div>
-                        <div class="stat-num">${counts[k]}</div>
-                    </div>
-                `).join("");
-
-                // 5. 渲染明細列表
-                const list = $("emp_detail_list");
-                if(rows.length === 0){
-                    list.innerHTML = `<div class="small">無紀錄</div>`;
-                } else {
-                    // 依日期排序
-                    rows.sort((a,b) => a.work_date.localeCompare(b.work_date));
-                    list.innerHTML = rows.map(r => `
-                        <div style="border-bottom:1px solid #eee;padding:8px 0;display:flex;justify-content:space-between">
-                            <span>${r.work_date}</span>
-                            <span class="shift-tag">${r.shift}</span>
-                        </div>
-                    `).join("");
-                }
-            }
-            setMsg(`查詢完成`, true);
-
-        } catch(e) {
-            setMsg("查詢失敗：" + e.message);
-        }
+    const isManager = (role==='engineer'||role==='supervisor');
+    let myNames = [];
+    
+    if(!isManager){
+        // 員工只能查自己
+        const {data:links} = await sb.from("site_person_links").select("person_name").eq("site_id",currentSiteId).eq("user_id",uid);
+        myNames = (links||[]).map(x=>x.person_name);
+        if(!myNames.length) { $("msg").textContent="您尚未連結班表姓名"; return; }
+        q = q.in("person_name", myNames);
     }
-
-    async function main(){
-        $("btn_back").onclick = () => location.href = "./app.html";
-        $("btn_logout").onclick = async () => { await supabase.auth.signOut(); location.href = "./index.html"; };
-
-        const me = await loadMe();
-        if(!me) return;
-
-        const siteIds = me.memberships.map(x => x.site_id);
-        const siteList = await loadSites(siteIds);
-        
-        const sel = $("site_sel");
-        siteList.forEach(s => {
-            const opt = document.createElement("option");
-            opt.value = s.id;
-            opt.textContent = `${s.name} (${s.code})`;
-            sel.appendChild(opt);
-        });
-
-        // 預設選第一個
-        if(siteList.length > 0) sel.value = siteList[0].id;
-        
-        // 更新上方資訊
-        const updateHeader = () => {
-            const sid = sel.value;
-            const s = siteList.find(x => x.id === sid);
-            const m = me.memberships.find(x => x.site_id === sid);
-            const role = m ? m.role : "";
-            
-            $("site_line").textContent = s ? `目前場域：${s.name}` : "";
-            $("role_line").textContent = `你的身分：${roleLabel(role)}`;
-            
-            render(sid, me, role);
-        };
-
-        if(siteList.length > 0) updateHeader();
-
-        sel.onchange = updateHeader;
-        $("btn_search").onclick = () => {
-             const m = me.memberships.find(x => x.site_id === sel.value);
-             render(sel.value, me, m ? m.role : "");
-        };
+    
+    const {data:rows, error} = await q;
+    if(error) { $("msg").textContent=error.message; return; }
+    $("msg").textContent = "";
+    
+    if(isManager){
+        $("view_manager").style.display="block";
+        $("view_employee").style.display="none";
+        renderManager(rows);
+    } else {
+        $("view_manager").style.display="none";
+        $("view_employee").style.display="block";
+        $("emp_name_display").textContent = "對象: " + myNames.join(", ");
+        renderEmployee(rows);
     }
+}
 
-    main();
-  </script>
+function renderManager(rows){
+    const map = {};
+    rows.forEach(r => {
+        if(!map[r.person_name]) { map[r.person_name]={total:0}; TARGET_SHIFTS.forEach(k=>map[r.person_name][k]=0); }
+        if(map[r.person_name][r.shift]!==undefined) { map[r.person_name][r.shift]++; map[r.person_name].total++; }
+    });
+    const tbody = $("mgr_tbody"); tbody.innerHTML="";
+    Object.keys(map).sort().forEach(name => {
+        const d = map[name];
+        tbody.innerHTML += `<tr><td>${name}</td><td>${d['事假']}</td><td>${d['病假']}</td><td>${d['喪假']}</td><td>${d['特休']}</td><td>${d['生理假']}</td><td>${d.total}</td></tr>`;
+    });
+}
+
+function renderEmployee(rows){
+    const counts = {}; TARGET_SHIFTS.forEach(k=>counts[k]=0);
+    rows.forEach(r => { if(counts[r.shift]!==undefined) counts[r.shift]++; });
+    $("emp_stats_box").innerHTML = TARGET_SHIFTS.map(k => `
+        <div class="stat-box"><div class="small">${k}</div><div class="stat-num">${counts[k]}</div></div>
+    `).join("");
+}
+
+main();
+</script>
 </body>
 </html>

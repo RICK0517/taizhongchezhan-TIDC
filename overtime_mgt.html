@@ -5,11 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>加班管理</title>
   <style>
-    body{font-family:system-ui,Segoe UI,Arial;max-width:980px;margin:28px auto;padding:0 14px;background:#f5f7f9}
+    body{font-family:system-ui,Segoe UI,Arial;max-width:980px;margin:20px auto;padding:0 14px;background:#f5f7f9}
     .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
     .card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 2px 5px rgba(0,0,0,0.03)}
     
-    /* 表單元件樣式 */
     label{display:block;margin-bottom:6px;font-size:13px;font-weight:600;color:#555}
     input,select,textarea,button{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box}
     input:focus,select:focus,textarea:focus{border-color:#2196f3;outline:none}
@@ -20,7 +19,6 @@
     button:hover{opacity:0.9}
     button.secondary{background:#64748b}
     
-    /* 列表樣式 */
     .record-item{border-bottom:1px solid #eee;padding:12px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
     .record-item:last-child{border-bottom:none}
     .tag{padding:2px 8px;border-radius:12px;font-size:12px;background:#eee;color:#333;margin-right:6px}
@@ -38,10 +36,6 @@
     <div>
       <h1 style="margin:0">加班管理</h1>
       <div id="site_info" style="font-size:13px;color:#666;margin-top:4px">讀取中...</div>
-    </div>
-    <div style="display:flex;gap:10px">
-        <select id="site_sel" style="min-width:200px"></select>
-        <button class="secondary" onclick="location.href='./app.html'" style="width:auto">回主控台</button>
     </div>
   </div>
 
@@ -112,60 +106,39 @@
     const $ = id => document.getElementById(id);
     let myUid = "";
 
-    // 切換「其他」輸入框顯示
+    const params = new URLSearchParams(window.location.search);
+    const currentSiteId = params.get("site_id");
+
     window.toggleOtherInput = function() {
         const val = $("reason_cat").value;
         $("reason_detail").style.display = (val === "其他") ? "block" : "none";
     }
 
     async function init() {
-        // 1. 驗證登入
+        if(!currentSiteId) { $("site_info").textContent = "錯誤：無場域ID"; return; }
+
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) { location.href = "./index.html"; return; }
         myUid = session.user.id;
         
-        // 2. 載入場域列表
-        const { data: members } = await supabase.from("site_memberships")
-            .select("site_id, role")
-            .eq("user_id", myUid)
-            .eq("is_active", true);
-            
-        if (!members || members.length === 0) {
-            alert("無場域權限"); return;
-        }
+        // 驗證並取得場域名稱
+        const { data: site } = await supabase.from("sites").select("name").eq("id", currentSiteId).single();
+        const { data: mem } = await supabase.from("site_memberships").select("role").eq("user_id", myUid).eq("site_id", currentSiteId).maybeSingle();
 
-        const siteIds = members.map(m => m.site_id);
-        const { data: sites } = await supabase.from("sites").select("id, name").in("id", siteIds);
-        
-        const sel = $("site_sel");
-        sites.forEach(s => {
-            const opt = document.createElement("option");
-            opt.value = s.id;
-            opt.textContent = s.name;
-            sel.appendChild(opt);
-        });
+        if (!mem) { $("site_info").textContent = "無此場域權限"; return; }
+        $("site_info").textContent = `場域：${site?.name} ｜ 您的身分：${roleLabel(mem.role)}`;
 
-        // 預設日期為今天
         $("work_date").value = new Date().toISOString().slice(0, 10);
-
-        // 監聽場域變更
-        sel.onchange = () => loadSiteData(sel.value);
-        if (sites.length > 0) loadSiteData(sites[0].id);
-
-        // 送出按鈕
+        
+        loadSiteData(currentSiteId);
         $("btn_submit").onclick = submitForm;
     }
 
     async function loadSiteData(siteId) {
-        // 顯示身分
-        const mem = await supabase.from("site_memberships").select("role").eq("user_id", myUid).eq("site_id", siteId).maybeSingle();
-        $("site_info").textContent = `您的身分：${roleLabel(mem.data?.role)}`;
-
         // A. 載入該場域人員清單
         const userSel = $("target_user");
         userSel.innerHTML = "<option>載入中...</option>";
         
-        // 使用既有的 RPC (如果沒有這個 RPC，需改用一般查詢)
         const { data: people } = await supabase.rpc("get_site_people", { p_site_id: siteId });
         
         userSel.innerHTML = "";
@@ -177,16 +150,12 @@
                 userSel.appendChild(opt);
             });
         }
-
         // B. 載入歷史紀錄
         loadHistory(siteId);
     }
 
     async function submitForm() {
-        const msg = $("msg");
-        msg.className = "msg"; 
-        
-        const siteId = $("site_sel").value;
+        const msg = $("msg"); msg.className = "msg"; 
         const reasonCat = $("reason_cat").value;
         const reasonDetail = $("reason_detail").value;
         const otType = $("ot_type").value;
@@ -195,7 +164,6 @@
         const hours = $("hours").value;
         const note = $("note").value;
 
-        // 驗證
         if (!targetUser) return showMsg("請選擇加班人員", false);
         if (!workDate) return showMsg("請選擇日期", false);
         if (!hours || parseFloat(hours) <= 0) return showMsg("請輸入有效的時數", false);
@@ -205,7 +173,7 @@
         $("btn_submit").disabled = true;
 
         const { error } = await supabase.from("overtime_records").insert({
-            site_id: siteId,
+            site_id: currentSiteId,
             user_id: targetUser,
             overtime_type: otType,
             reason_category: reasonCat,
@@ -219,14 +187,11 @@
         $("btn_submit").textContent = "送出紀錄";
         $("btn_submit").disabled = false;
 
-        if (error) {
-            showMsg("失敗：" + error.message, false);
-        } else {
+        if (error) showMsg("失敗：" + error.message, false);
+        else {
             showMsg("新增成功！", true);
-            // 清空部分欄位
-            $("hours").value = "";
-            $("note").value = "";
-            loadHistory(siteId);
+            $("hours").value = ""; $("note").value = "";
+            loadHistory(currentSiteId);
         }
     }
 
@@ -235,23 +200,12 @@
         box.innerHTML = `<div style="color:#888;font-size:13px">更新中...</div>`;
 
         const { data, error } = await supabase.from("overtime_records")
-            .select(`
-                *,
-                profiles:user_id ( display_name, username )
-            `)
+            .select(`*, profiles:user_id ( display_name, username )`)
             .eq("site_id", siteId)
-            .order("created_at", { ascending: false })
-            .limit(20);
+            .order("created_at", { ascending: false }).limit(20);
 
-        if (error) {
-            box.innerHTML = `<div style="color:red">讀取失敗</div>`;
-            return;
-        }
-
-        if (data.length === 0) {
-            box.innerHTML = `<div style="color:#888;padding:10px">尚無紀錄</div>`;
-            return;
-        }
+        if (error || !data) { box.innerHTML = `<div style="color:red">讀取失敗</div>`; return; }
+        if (data.length === 0) { box.innerHTML = `<div style="color:#888;padding:10px">尚無紀錄</div>`; return; }
 
         box.innerHTML = "";
         data.forEach(r => {
@@ -280,12 +234,11 @@
         });
     }
 
-    // 刪除功能 (掛載到 window 以便 HTML onclick 呼叫)
     window.delRec = async function(id) {
         if(!confirm("確定要刪除此筆加班紀錄？")) return;
         const { error } = await supabase.from("overtime_records").delete().eq("id", id);
         if(error) alert("刪除失敗:" + error.message);
-        else loadHistory($("site_sel").value);
+        else loadHistory(currentSiteId);
     }
 
     function showMsg(text, isOk) {
@@ -294,16 +247,8 @@
         el.className = isOk ? "msg ok" : "msg err";
         setTimeout(() => { if(isOk) el.style.display="none"; }, 3000);
     }
-
-    function escapeHtml(text) {
-        return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "";
-    }
-    
-    function roleLabel(r){ 
-        if(r==='engineer') return '工程師';
-        if(r==='supervisor') return '主管';
-        return '員工'; 
-    }
+    function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : ""; }
+    function roleLabel(r){ return r==='engineer'?'工程師':r==='supervisor'?'主管':'員工'; }
 
     init();
   </script>

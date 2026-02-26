@@ -5,206 +5,224 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>審核請假</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <style>
-    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;margin:0;background:#fafafa}
-    .bar{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px;background:#fff;border-bottom:1px solid #e8e8e8;flex-wrap:wrap}
-    .card{background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:14px;margin:16px}
-    input,select,button{max-width:100%}
-    input,select{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px}
-    button{padding:10px 14px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;background:#fafafa;padding:20px}
+    
+    .card{background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+    input,select{padding:8px;border:1px solid #ddd;border-radius:6px;font-size:14px}
+    button{padding:6px 12px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:13px}
     button:hover{background:#f5f5f5}
-    .small{opacity:.75;font-size:13px;line-height:1.4}
-    .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
-    .task{border:1px solid #e2e2e2;border-radius:10px;padding:12px}
-    .pill{display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid #ddd;font-size:12px;opacity:.9}
-    .pill.pending{background:#fff7ed;color:#c2410c;border-color:#ffedd5}
-    .pill.approved{background:#f0fdf4;color:#15803d;border-color:#dcfce7}
-    .pill.rejected{background:#fef2f2;color:#b91c1c;border-color:#fee2e2}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .photo-thumb{max-width:120px;border-radius:8px;border:1px solid #eee;margin-top:10px;cursor:pointer;display:block}
+    /* 匯出按鈕樣式 */
+    button.export-btn{background:#00796b;color:white;border:none;padding:8px 16px;font-weight:bold;}
+    button.export-btn:hover{background:#004d40;}
+    
+    .task{border:1px solid #e2e2e2;border-radius:10px;padding:16px; margin-bottom:12px; background:#fff;}
+    .pill{display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid #ddd;font-size:12px}
+    .pill.pending{background:#fff7ed;color:#c2410c}
+    .pill.approved{background:#f0fdf4;color:#15803d}
+    .pill.rejected{background:#fef2f2;color:#b91c1c}
+    
+    /* 唯讀資訊列 */
+    .detail-row { font-size:14px; color:#444; margin-top:6px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    
+    /* 主管填寫區樣式 */
+    .mgr-input-group {
+        margin-top: 12px; padding: 14px; background: #f0f9ff; border-radius: 8px; border: 1px solid #b3e5fc;
+        display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    .mgr-input-group label { font-size: 12px; font-weight: bold; color: #0277bd; display:block; margin-bottom:4px;}
+    .mgr-input-group input { width: 100%; box-sizing: border-box; border: 1px solid #90caf9; padding:8px; }
+    
+    /* 強調第8點：時數合計 */
+    .highlight-input { border: 2px solid #29b6f6 !important; background:#fff; }
   </style>
 </head>
 <body>
-  <div class="bar">
-    <div>
-      <div style="font-weight:700;font-size:18px">審核請假</div>
-      <div class="small" id="me_line">讀取中…</div>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <select id="site_sel" style="min-width:220px"></select>
-      <button id="btn_back" style="width:auto">回主控台</button>
-      <button id="btn_logout" style="width:auto">登出</button>
-    </div>
+  
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h2 style="margin:0">審核請假管理</h2>
+      <div style="display:flex;gap:10px;">
+        <select id="status_sel">
+            <option value="pending" selected>待審核</option>
+            <option value="approved">已通過</option>
+            <option value="rejected">未通過</option>
+            <option value="all">全部歷史</option>
+        </select>
+        <button id="btn_refresh">重新整理</button>
+        <button id="btn_export" class="export-btn">📊 匯出 Excel (9欄)</button>
+      </div>
   </div>
 
-  <section class="card">
-    <div class="row">
-      <div style="min-width:220px;flex:1"><div class="small">狀態</div>
-        <select id="status_sel">
-          <option value="pending" selected>審核中（待處理）</option>
-          <option value="approved">已通過（歷史）</option>
-          <option value="rejected">未通過（歷史）</option>
-          <option value="all">全部</option>
-        </select>
-      </div>
-      <button id="btn_refresh" style="border-color:#111;margin-top:20px">更新列表</button>
-    </div>
-    <div id="msg" class="msg"></div>
-  </section>
-
-  <section class="card">
-    <div id="box" style="display:grid;gap:10px"></div>
-  </section>
+  <div id="msg" style="color:red;font-size:13px;margin-bottom:10px"></div>
+  <div id="box"></div>
 
 <script>
   const $ = (id) => document.getElementById(id);
-  function escapeHtml(s){ return (s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  function isManagerRole(role){ return role === "engineer" || role === "supervisor"; }
-  
-  // 這裡請填入你的 Supabase URL 與 Key
-  const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
-  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const sb = supabase.createClient("https://whbllncddoqbwukstxel.supabase.co", "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2");
+  const params = new URLSearchParams(window.location.search);
+  const currentSiteId = params.get("site_id");
 
-  $("btn_back").onclick = () => location.href = "./app.html";
-  $("btn_logout").onclick = async () => { await sb.auth.signOut(); location.href = "./index.html"; };
-
-  // 定義審核函數 (放在全域，讓 HTML 按鈕可以呼叫)
-  window.decide = async (id, status) => {
-    const actionText = status === 'approved' ? '通過' : '拒絕';
-    if (!confirm(`確定要「${actionText}」這筆申請嗎？`)) return;
+  // === 審核通過 (寫入資料庫) ===
+  window.approve = async (id) => {
+    if (!confirm("確定通過並儲存資料?")) return;
     
-    // 呼叫後端 RPC 函數
-    const { error } = await sb.rpc("decide_leave_request", { 
-      p_request_id: id, 
-      p_decision: status 
-    });
+    // 取得主管填寫的欄位 (對應 3, 4, 5, 8, 9)
+    const agentName = $(`agent_name_${id}`).value;
+    const agentUnit = $(`agent_unit_${id}`).value;
+    const task = $(`task_${id}`).value;
+    const duration = $(`duration_${id}`).value; // 第8點
+    const mgrNote = $(`mgr_note_${id}`).value;   // 第9點：備註欄
 
-    if (error) {
-      alert("處理失敗：" + error.message);
-      console.error(error);
-    } else {
-      alert("已更新！");
-      // 重新整理頁面以顯示最新狀態
-      location.reload();
-    }
+    // 必填檢查
+    if(!agentName){ alert("請填寫【代理人】"); return; }
+    if(!duration){ alert("請填寫【請假時程合計】(例如: 1日4小時)"); return; }
+
+    const { error } = await sb.from("leave_requests").update({
+        agent_name: agentName,
+        agent_unit: agentUnit,
+        delegation_task: task,
+        total_duration: duration,
+        manager_note: mgrNote,
+        status: 'approved'
+    }).eq("id", id);
+
+    if (error) alert("更新失敗: " + error.message); 
+    else { alert("已通過"); loadData(); }
   };
 
-  async function loadMe(){
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) { location.href = "./index.html"; return null; }
-    const uid = session.user.id;
-    const p = await sb.from("profiles").select("username,display_name").eq("user_id", uid).maybeSingle();
-    const m = await sb.from("site_memberships").select("site_id,role").eq("user_id", uid).eq("is_active", true);
+  // === 拒絕 ===
+  window.reject = async (id) => {
+      if (!confirm("確定拒絕?")) return;
+      const { error } = await sb.from("leave_requests").update({ status: 'rejected' }).eq("id", id);
+      if (error) alert("操作失敗"); else loadData();
+  };
+
+  let currentData = [];
+  let currentSiteName = "";
+
+  async function loadData(){
+    if(!currentSiteId) { $("box").innerHTML="無效的場域 ID"; return; }
     
-    const name = p.data?.display_name || p.data?.username || "User";
-    $("me_line").textContent = `登入者：${name}`;
+    const status = $("status_sel").value;
+    $("box").innerHTML = "讀取中...";
+
+    // 取得場域名稱 (對應第2點)
+    const {data:s} = await sb.from("sites").select("name").eq("id", currentSiteId).single();
+    if(s) currentSiteName = s.name;
     
-    return { uid, memberships: m.data || [] };
-  }
+    // 取得人員對照表 (對應第1點：申請人姓名)
+    const { data: people } = await sb.rpc("get_site_people", { p_site_id: currentSiteId });
+    const nameMap = {};
+    if(people) people.forEach(p => nameMap[p.user_id] = p.display_name || p.username);
 
-  async function render(siteId, roleCur){
-    const box = $("box"); 
-    box.innerHTML = `<div class="small">讀取中…</div>`;
+    let q = sb.from("leave_requests").select("*").eq("site_id", currentSiteId).order("created_at", { ascending:false });
+    if (status !== "all") q = q.eq("status", status);
     
-    if (!isManagerRole(roleCur)){ 
-      box.innerHTML = "權限不足：只有工程師或主管可以審核。"; 
-      return; 
-    }
-
-    // 1. 取得該場域所有人員名稱 (Mapping)
-    const pr = await sb.rpc("get_site_people", { p_site_id: siteId });
-    const nameMap = {}; 
-    if(pr.data) (pr.data || []).forEach(x => nameMap[x.user_id] = x.display_name || x.user_id);
-
-    // 2. 查詢請假單
-    const st = $("status_sel").value;
-    let q = sb.from("leave_requests").select("*").eq("site_id", siteId).order("created_at", { ascending:false });
-    if (st !== "all") q = q.eq("status", st);
-
-    const { data: rows, error } = await q.limit(50);
+    const { data, error } = await q;
+    if (error) { $("box").innerHTML = "讀取錯誤"; return; }
     
-    if (error) { 
-      box.innerHTML = `<div class="msg">讀取錯誤：${error.message}</div>`; 
-      return; 
-    }
+    currentData = data.map(r => ({ ...r, requester_name: nameMap[r.requester_id] || "未知人員" }));
 
-    if (!rows || rows.length === 0){
-        box.innerHTML = `<div class="small">目前沒有${st==='pending'?'待審核':''}資料</div>`;
-        return;
-    }
+    if (currentData.length === 0){ $("box").innerHTML = "<div style='color:#666;text-align:center'>無資料</div>"; return; }
 
-    box.innerHTML = "";
-    for (const r of rows){
-      const who = nameMap[r.requester_id] || "未知人員";
+    $("box").innerHTML = "";
+    currentData.forEach(r => {
+      const dateStr = r.date_from.replace("T"," ") + " ~ " + r.date_to.replace("T"," ");
+      const isPending = r.status === "pending";
       
-      // 處理圖片
-      let imgHtml = "";
-      if (r.photo_path) {
-        const { data } = sb.storage.from('leave-photos').getPublicUrl(r.photo_path);
-        imgHtml = `<div style="margin-top:8px"><a href="${data.publicUrl}" target="_blank"><img src="${data.publicUrl}" class="photo-thumb" title="點擊看大圖"></a></div>`;
-      }
-
-      // 日期顯示 (如果是同一天只顯示一個，不同天顯示範圍)
-      const dateStr = r.date_from === r.date_to ? r.date_from : `${r.date_from} ~ ${r.date_to}`;
-
       const div = document.createElement("div");
       div.className = "task";
       div.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-          <div>
-            <div style="font-weight:700;font-size:15px">${escapeHtml(who)} <span style="font-weight:400;color:#666">申請</span> ${escapeHtml(r.leave_type)}</div>
-            <div class="small" style="color:#333;margin-top:4px">日期：${escapeHtml(dateStr)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="font-weight:700;font-size:16px;color:#1565c0">
+            ${r.requester_name} <span style="color:#333;font-weight:normal;font-size:14px">申請</span> ${r.leave_type}
           </div>
-          <span class="pill ${r.status}">${r.status}</span>
+          <span class="pill ${r.status}">${r.status==="pending"?"待審核":r.status}</span>
         </div>
-        
-        ${r.note ? `<div style="background:#f9f9f9;padding:6px;border-radius:6px;margin-top:8px;font-size:14px;color:#444">${escapeHtml(r.note)}</div>` : ""}
-        
-        ${imgHtml}
-        
-        <div class="small" style="margin-top:8px;color:#999">申請時間：${new Date(r.created_at).toLocaleString()}</div>
 
-        ${r.status === "pending" ? `
-          <div style="margin-top:12px;border-top:1px solid #eee;padding-top:10px;display:flex;gap:10px">
-            <button style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-weight:700" onclick="decide('${r.id}', 'approved')">通過</button>
-            <button style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;font-weight:700" onclick="decide('${r.id}', 'rejected')">拒絕</button>
-          </div>` : ""}
+        <div class="detail-row">
+            <span>📅 時間區間：${dateStr}</span>
+        </div>
+        ${r.note ? `<div style="background:#f5f5f5;padding:8px;margin-top:8px;border-radius:6px;font-size:13px">📄 事由：${r.note}</div>` : ""}
+        
+        ${isPending ? `
+            <div class="mgr-input-group">
+                <div style="grid-column: span 2; border-bottom:1px dashed #90caf9; padding-bottom:4px; margin-bottom:4px; font-weight:bold; display:flex; justify-content:space-between;">
+                    <span>✏️ 主管核定填寫區</span>
+                    <span style="font-size:11px;color:#666;font-weight:normal">請填寫以下 5 個欄位</span>
+                </div>
+                
+                <div style="grid-column: span 2">
+                    <label>8. 請假時程合計 (必填)</label>
+                    <input id="duration_${r.id}" class="highlight-input" placeholder="例如: 1日4小時" value="${r.total_duration||''}">
+                </div>
+
+                <div>
+                    <label>3. 代理人</label>
+                    <input id="agent_name_${r.id}" placeholder="姓名" value="${r.agent_name||''}">
+                </div>
+                <div>
+                    <label>4. 代理人單位</label>
+                    <input id="agent_unit_${r.id}" placeholder="場域" value="${r.agent_unit||''}">
+                </div>
+
+                <div style="grid-column: span 2">
+                    <label>5. 委託代理事項</label>
+                    <input id="task_${r.id}" placeholder="事項內容" value="${r.delegation_task||''}">
+                </div>
+
+                <div style="grid-column: span 2">
+                    <label>9. 備註欄</label>
+                    <input id="mgr_note_${r.id}" placeholder="主管備註..." value="${r.manager_note||''}">
+                </div>
+            </div>
+
+            <div style="margin-top:10px;display:flex;gap:10px;justify-content:flex-end">
+                <button onclick="reject('${r.id}')" style="background:#fee2e2;color:#b91c1c;border:none">拒絕</button>
+                <button onclick="approve('${r.id}')" style="background:#2563eb;color:#fff;border:none;padding:6px 16px">確認並通過</button>
+            </div>
+        ` : `
+            <div style="margin-top:10px;padding-top:10px;border-top:1px dashed #eee;font-size:13px;color:#555">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+                    <div>⏱️ 核定合計：<strong>${r.total_duration || "未填寫"}</strong></div>
+                    <div>👤 代理人：${r.agent_name || "-"} (${r.agent_unit || "-"})</div>
+                    <div style="grid-column:span 2">📋 委託事項：${r.delegation_task || "-"}</div>
+                    <div style="grid-column:span 2;color:#d81b60">📝 備註欄：${r.manager_note || "(無)"}</div>
+                </div>
+            </div>
+        `}
       `;
-      box.appendChild(div);
-    }
+      $("box").appendChild(div);
+    });
   }
 
-  (async () => {
-    const me = await loadMe(); 
-    if (!me) return;
-
-    // 載入該使用者的場域
-    const {data: sites} = await sb.from("sites").select("*").in("id", me.memberships.map(m=>m.site_id));
-    const sel = $("site_sel");
+  // === 匯出 Excel (嚴格對應 9 個欄位) ===
+  $("btn_export").onclick = () => {
+    if(!currentData.length) { alert("目前無資料可匯出"); return; }
     
-    if(!sites || sites.length === 0) {
-        $("msg").textContent = "你目前沒有所屬場域。";
-        return;
-    }
+    const exportData = currentData.map(row => ({
+        "1申請人": row.requester_name,
+        "2單位名稱(選擇場域)": currentSiteName,
+        "3代理人": row.agent_name || "",
+        "4代理人單位(選擇場域)": row.agent_unit || "",
+        "5委託代理事項": row.delegation_task || "",
+        "6請假類型": row.leave_type,
+        "7請假事由": row.note || "",
+        "8請假時程": `${row.date_from.replace("T"," ")} ~ ${row.date_to.replace("T"," ")} (共計 ${row.total_duration||""})`,
+        "9備註欄": row.manager_note || ""
+    }));
 
-    sites.forEach(s => { 
-        const opt = document.createElement("option"); 
-        opt.value=s.id; 
-        opt.textContent=s.name; 
-        sel.appendChild(opt); 
-    });
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "請假明細");
+    XLSX.writeFile(wb, `請假匯出_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
 
-    const getRole = (sid) => me.memberships.find(m=>m.site_id===sid)?.role;
+  $("btn_refresh").onclick = loadData;
+  $("status_sel").onchange = loadData;
+  loadData();
 
-    // 初次渲染
-    await render(sel.value, getRole(sel.value));
-
-    // 事件監聽
-    sel.onchange = () => render(sel.value, getRole(sel.value));
-    $("status_sel").onchange = () => render(sel.value, getRole(sel.value));
-    $("btn_refresh").onclick = () => render(sel.value, getRole(sel.value));
-  })();
 </script>
 </body>
 </html>
