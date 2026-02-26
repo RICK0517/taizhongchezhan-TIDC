@@ -4,22 +4,32 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>人事資料管理</title>
+  <script src="theme.js"></script>
   <style>
-    body{font-family:system-ui,Arial;max-width:980px;margin:28px auto;padding:0 14px;background:#f5f7f9}
-    .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);margin-top:16px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:16px}
-    label{display:block;margin-bottom:4px;font-size:13px;color:#666}
-    input, select{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box}
-    /* 唯讀狀態的樣式 */
-    input:disabled, select:disabled{background:#f0f2f5;color:#555;cursor:not-allowed;border-color:#eee}
+    body{font-family:system-ui,Arial;max-width:980px;margin:28px auto;padding:0 14px; background:var(--bg-color, #f5f7f9); color:var(--text-color, #333)}
     
-    button{padding:12px 24px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer}
-    button:hover{background:#1d4ed8}
+    .card{background:var(--card-bg, #fff); border-radius:12px; padding:20px; 
+          box-shadow:0 2px 8px rgba(0,0,0,0.05); margin-top:16px; 
+          border:1px solid var(--border-color, #eee)}
+    
+    .grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:16px}
+    label{display:block;margin-bottom:4px;font-size:13px;color:var(--text-color);opacity:0.8}
+    
+    input, select{width:100%;padding:10px;border-radius:8px;box-sizing:border-box;
+                  border:1px solid var(--input-border, #ddd); 
+                  background:var(--input-bg, #fff); 
+                  color:var(--text-color, #333)}
+    
+    input:disabled, select:disabled{opacity:0.6; cursor:not-allowed; background:rgba(0,0,0,0.05)}
+    
+    button{padding:12px 24px;background:var(--primary-color, #2563eb);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer}
+    button:hover{opacity:0.9}
     button.secondary{background:#64748b}
     
     table{width:100%;border-collapse:collapse;margin-top:12px}
-    th, td{text-align:left;padding:12px;border-bottom:1px solid #eee}
-    th{background:#f8fafc;font-weight:600}
+    th, td{text-align:left;padding:12px;border-bottom:1px solid var(--border-color, #eee)}
+    th{background:rgba(0,0,0,0.03);font-weight:600;color:var(--text-color)}
+    
     .hidden{display:none}
     .msg{margin-top:10px;padding:10px;border-radius:6px;font-size:14px}
     .error{background:#fee2e2;color:#b91c1c}

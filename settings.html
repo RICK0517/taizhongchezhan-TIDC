@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>個人設定</title>
+  <style>
+    :root {
+      --primary-color: #2196f3;
+    }
+    body{font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;max-width:800px;margin:20px auto;padding:0 14px;background:#f9f9f9;color:#333}
+    .card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:25px;margin-bottom:20px;box-shadow:0 4px 6px rgba(0,0,0,0.02)}
+    h2{margin-top:0;border-bottom:1px solid #eee;padding-bottom:15px;margin-bottom:20px;color:#444;font-size:1.5rem}
+    label{display:block;margin-bottom:8px;font-weight:bold;color:#555}
+    select, button{padding:10px;border-radius:8px;border:1px solid #ccc;font-size:14px;width:100%;max-width:400px}
+    
+    .section-label { font-size: 14px; color: #666; margin-bottom: 12px; border-left: 4px solid var(--primary-color); padding-left: 8px; font-weight: bold; }
+
+    /* 配色選項卡 */
+    .theme-group-title { font-size: 13px; color: #888; margin: 15px 0 10px; display: flex; align-items: center; gap: 8px; }
+    .theme-group-title::after { content: ""; flex: 1; height: 1px; background: #eee; }
+    
+    .theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .theme-card {
+      border: 1px solid #eee; border-radius: 10px; padding: 12px; cursor: pointer;
+      text-align: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); position: relative;
+      background: #fff;
+    }
+    .theme-card:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.08); border-color: #ddd; }
+    .theme-card.active { border-color: var(--primary-color); background-color: rgba(33, 150, 243, 0.05); border-width: 2px; }
+    .theme-card.active::after { content:"●"; position:absolute; top:4px; right:8px; color: var(--primary-color); font-size: 12px; }
+
+    /* 顏色預覽容器 */
+    .color-preview { display: flex; justify-content: center; gap: 4px; margin-bottom: 8px; }
+    .color-dot { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.05); }
+    .theme-name { font-size: 13px; font-weight: 500; color: #444; }
+    
+    .btn-save { background:#2196f3; color:white; border:none; font-weight:bold; cursor:pointer; width:auto; padding:12px 40px; margin-top: 10px; transition: background 0.2s; }
+    .btn-save:hover { background:#1976d2; }
+    .msg { margin-top:15px; color:#2e7d32; font-weight:bold; display:none; padding: 10px; background: #e8f5e9; border-radius: 6px; text-align: center; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>⚙️ 個人顯示設定</h2>
+    
+    <div style="margin-bottom:30px;">
+      <div class="section-label">1. 預設登入場域</div>
+      <div style="font-size:13px;color:#777;margin-bottom:10px;">設定後，每次登入系統將自動為您選定該場域。</div>
+      <select id="default_site_sel">
+        <option value="">(無) 請選擇...</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="section-label">2. 介面配色風格</div>
+      
+      <div class="theme-group-title">☀️ 淺色模式 (Light Modes)</div>
+      <div class="theme-grid">
+        <div class="theme-card" onclick="selectTheme('light')" id="th_light">
+          <div class="color-preview">
+            <div class="color-dot" style="background:#fff;"></div>
+            <div class="color-dot" style="background:#2196f3;"></div>
+          </div>
+          <div class="theme-name">經典白</div>
+        </div>
+        <div class="theme-card" onclick="selectTheme('soft_blue')" id="th_soft_blue">
+          <div class="color-preview">
+            <div class="color-dot" style="background:#fff;"></div>
+            <div class="color-dot" style="background:#03a9f4;"></div>
+          </div>
+          <div class="theme-name">天空藍</div>
+        </div>
+        <div class="theme-card" onclick="selectTheme('rose')" id="th_rose">
+          <div class="color-preview">
+            <div class="color-dot" style="background:#fff;"></div>
+            <div class="color-dot" style="background:#e91e63;"></div>
+          </div>
+          <div class="theme-name">玫瑰紅</div>
+        </div>
+        <div class="theme-card" onclick="selectTheme('mint')" id="th_mint">
+          <div class="color-preview">
+            <div class="color-dot" style="background:#fff;"></div>
+            <div class="color-dot" style="background:#00bfa5;"></div>
+          </div>
+          <div class="theme-name">薄荷綠</div>
+        </div>
+        <div class="theme-card" onclick="selectTheme('amber')" id="th_amber">
+          <div class="color-preview">
+            <div class="color-dot" style="background:#fff;"></div>
+            <div class="color-dot" style="background:#ff8f00;"></div>
+          </div>
+          <div class="theme-name">琥珀橘</div>
+        </div>
+      </div>
+
+      <div class="theme-group-title">🌙 深色模式 (Dark Modes)</div>
+      <div class="theme-grid">
+        <div class="theme-card" onclick="selectTheme('dark')" id="th_dark">
+          <div class="color-preview">
+            <div class="color-dot" style="background:#1e1e1e;"></div>
+            <div class="color-dot" style="background:#90caf9;"></div>
+          </div>
+          <div class="theme-name">標準深灰</div>
+        </div>
+        <div class="theme-card" onclick="selectTheme('midnight')" id="th_midnight">
+          <div class="color-preview">
+            <div class="color-dot" style="background:#0a0e14;"></div>
+            <div class="color-dot" style="background:#bb86fc;"></div>
+          </div>
+          <div class="theme-name">極致黑</div>
+        </div>
+        <div class="theme-card" onclick="selectTheme('forest_dark')" id="th_forest_dark">
+          <div class="color-preview">
+            <div class="color-dot" style="background:#1b2e1c;"></div>
+            <div class="color-dot" style="background:#81c784;"></div>
+          </div>
+          <div class="theme-name">深林綠</div>
+        </div>
+        <div class="theme-card" onclick="selectTheme('lava')" id="th_lava">
+          <div class="color-preview">
+            <div class="color-dot" style="background:#210b05;"></div>
+            <div class="color-dot" style="background:#ff7043;"></div>
+          </div>
+          <div class="theme-name">岩漿紅</div>
+        </div>
+        <div class="theme-card" onclick="selectTheme('ocean_dark')" id="th_ocean_dark">
+          <div class="color-preview">
+            <div class="color-dot" style="background:#001a2c;"></div>
+            <div class="color-dot" style="background:#4fc3f7;"></div>
+          </div>
+          <div class="theme-name">深海藍</div>
+        </div>
+      </div>
+      
+      <input type="hidden" id="selected_theme" value="light">
+    </div>
+
+    <div style="text-align:right;">
+        <button class="btn-save" onclick="saveSettings()">儲存所有設定</button>
+    </div>
+    <div id="msg" class="msg">✨ 設定已儲存！</div>
+  </div>
+
+<script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const $ = id => document.getElementById(id);
+
+    const STORAGE_KEY = "app_preferences";
+    let prefs = JSON.parse(localStorage.getItem(STORAGE_KEY)) || { default_site_id: "", theme: "light" };
+
+    async function init(){
+        const { data: { session } } = await supabase.auth.getSession();
+        if(!session) { location.href="./index.html"; return; }
+        const uid = session.user.id;
+
+        const { data: mems } = await supabase.from("site_memberships").select("site_id").eq("user_id", uid).eq("is_active", true);
+        if(mems && mems.length > 0){
+            const siteIds = mems.map(m => m.site_id);
+            const { data: sites } = await supabase.from("sites").select("id, name").in("id", siteIds);
+            
+            const sel = $("default_site_sel");
+            (sites||[]).forEach(s => {
+                const opt = document.createElement("option");
+                opt.value = s.id;
+                opt.textContent = s.name;
+                sel.appendChild(opt);
+            });
+            sel.value = prefs.default_site_id || "";
+        }
+        selectTheme(prefs.theme || "light");
+    }
+
+    window.selectTheme = (theme) => {
+        document.querySelectorAll(".theme-card").forEach(el => el.classList.remove("active"));
+        const target = $("th_" + theme);
+        if(target) target.classList.add("active");
+        $("selected_theme").value = theme;
+        
+        // 即時預覽：發送訊息給父視窗 (app.html)
+        window.parent.postMessage({ type: 'PREVIEW_THEME', theme: theme }, '*');
+    };
+
+    window.saveSettings = () => {
+        const newPrefs = {
+            default_site_id: $("default_site_sel").value,
+            theme: $("selected_theme").value
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newPrefs));
+        
+        // 通知父視窗確認變更
+        window.parent.postMessage({ type: 'UPDATE_THEME', theme: newPrefs.theme }, '*');
+        
+        $("msg").style.display = "block";
+        setTimeout(() => $("msg").style.display = "none", 3000);
+    };
+
+    init();
+</script>
+</body>
+</html>

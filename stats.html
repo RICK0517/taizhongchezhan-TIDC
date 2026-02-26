@@ -4,21 +4,22 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>假別統計</title>
+  <script src="theme.js"></script>
   <style>
-    body{font-family:system-ui,Segoe UI,Arial;margin:0;padding:20px;background:#fafafa}
-    .card{border:1px solid #ddd;border-radius:10px;padding:15px;margin-bottom:15px;background:#fff}
+    body{font-family:system-ui,Segoe UI,Arial;margin:0;padding:20px;background:var(--bg-color); color:var(--text-color)}
+    .card{border:1px solid var(--border-color);border-radius:10px;padding:15px;margin-bottom:15px;background:var(--card-bg)}
     .bar{margin-bottom:15px}
-    input,button{padding:10px;border:1px solid #ddd;border-radius:6px}
-    button{background:#2563eb;color:#fff;font-weight:700;cursor:pointer;border:none}
+    input,button{padding:10px;border:1px solid var(--input-border);border-radius:6px; background:var(--input-bg); color:var(--text-color)}
+    button{background:var(--primary-color, #2563eb);color:#fff;font-weight:700;cursor:pointer;border:none}
     
     table{width:100%;border-collapse:collapse;margin-top:10px}
-    th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;font-size:14px}
-    th{background:#f9f9f9}
+    th,td{border-bottom:1px solid var(--border-color);padding:8px 6px;text-align:left;font-size:14px}
+    th{background:rgba(0,0,0,0.05)}
     
     .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-top: 10px; }
-    .stat-box { border: 1px solid #eee; border-radius: 8px; padding: 10px; text-align: center; background: #fff; }
-    .stat-num { font-size: 20px; font-weight: 700; color: #2563eb; }
-    .small { font-size: 13px; color: #666; }
+    .stat-box { border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; text-align: center; background: var(--card-bg); }
+    .stat-num { font-size: 20px; font-weight: 700; color: var(--primary-color, #2563eb); }
+    .small { font-size: 13px; color: var(--text-color); opacity:0.7; }
   </style>
 </head>
 <body>

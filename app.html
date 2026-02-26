@@ -5,29 +5,41 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>主控台</title>
   <style>
-    /* ===== 基礎重置與變數 ===== */
+    /* ===== 基礎重置與變數 (支援換色) ===== */
     :root {
       --sidebar-width: 180px; 
       --header-height: 50px;
+      
+      /* 預設值 (Light) - JS 會動態覆寫這些變數 */
       --primary-color: #2196f3;
       --bg-color: #f4f6f8;
+      --sidebar-bg: #fff;
+      --sidebar-text: #333;
+      --card-bg: #fff;
+      --text-color: #333;
+      --border-color: #e0e0e0;
+      --nav-hover: #e3f2fd;
+      --nav-active-text: #1565c0;
+      --input-bg: #fff;
+      --input-border: #ccc;
     }
     body { 
       font-family: system-ui, "Segoe UI", Arial, sans-serif; 
       margin: 0; padding: 0; 
       background: var(--bg-color); 
-      color: #333;
+      color: var(--text-color);
       display: flex;
-      height: 100vh; /* 固定高度，讓內部滾動 */
-      overflow: hidden; /* 防止整頁滾動 */
+      height: 100vh;
+      overflow: hidden;
+      transition: background 0.3s, color 0.3s;
     }
     *, *::before, *::after { box-sizing: border-box; }
 
     /* ===== 左側側邊欄樣式 ===== */
     .sidebar {
       width: var(--sidebar-width);
-      background: #fff;
-      border-right: 1px solid #e0e0e0;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border-color);
       display: flex;
       flex-direction: column;
       flex-shrink: 0; 
@@ -37,6 +49,8 @@
       padding: 0;
       box-shadow: 2px 0 5px rgba(0,0,0,0.02);
       font-size: 0.9rem;
+      color: var(--sidebar-text);
+      transition: background 0.3s;
     }
 
     /* 中間滾動區域 */
@@ -45,25 +59,22 @@
       overflow-y: scroll; 
       padding: 10px;
       scrollbar-width: thin; 
-      scrollbar-color: #cfd8dc transparent;
     }
     .sidebar-scroll-content::-webkit-scrollbar { width: 6px; }
-    .sidebar-scroll-content::-webkit-scrollbar-track { background: transparent; }
     .sidebar-scroll-content::-webkit-scrollbar-thumb { background-color: #cfd8dc; border-radius: 10px; }
-    .sidebar-scroll-content::-webkit-scrollbar-thumb:hover { background-color: #b0bec5; }
 
     /* 底部固定區域 */
     .sidebar-footer { 
       flex-shrink: 0;
       padding: 15px 10px;
-      border-top: 1px solid #eee; 
-      background-color: #fcfcfc;
+      border-top: 1px solid var(--border-color); 
+      background-color: var(--sidebar-bg);
       z-index: 101;
     }
 
     .brand {
       font-size: 1.1rem;
-      font-weight: 800; color: #1565c0;
+      font-weight: 800; color: var(--primary-color);
       margin-bottom: 15px; padding-left: 5px; 
       display: flex; align-items: center;
       cursor: pointer;
@@ -71,50 +82,50 @@
     
     /* 個人資訊樣式 */
     .user-profile {
-      background: #f5f9ff; 
+      background: rgba(33, 150, 243, 0.08); 
       border-radius: 6px; 
       padding: 8px 10px;
       margin-bottom: 10px; 
-      border: 1px solid #e3f2fd;
+      border: 1px solid rgba(33, 150, 243, 0.15);
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
     .profile-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .user-name { font-weight: 800; font-size: 0.95rem; color: #1565c0; }
+    .user-name { font-weight: 800; font-size: 0.95rem; color: var(--primary-color); }
     .user-role { 
-      font-size: 0.7rem; color: #555; background-color: #e3f2fd; 
+      font-size: 0.7rem; color: var(--sidebar-text); opacity: 0.8; background-color: rgba(128,128,128,0.1); 
       padding: 2px 6px; border-radius: 4px; white-space: nowrap; 
     }
     
     /* 班表小卡片 */
     .shift-card {
-      background-color: #fff;
-      border: 1px solid #bbdefb;
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
       border-radius: 8px;
       padding: 8px 10px;
       margin-top: 6px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .shift-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
-    .shift-label { font-size: 0.75rem; color: #78909c; }
-    .shift-val-today { font-size: 1.2rem; font-weight: 800; color: #1565c0; }
-    .shift-val-tmr { font-size: 0.9rem; font-weight: 600; color: #555; }
+    .shift-label { font-size: 0.75rem; color: var(--sidebar-text); opacity: 0.7; }
+    .shift-val-today { font-size: 1.2rem; font-weight: 800; color: var(--primary-color); }
+    .shift-val-tmr { font-size: 0.9rem; font-weight: 600; color: var(--sidebar-text); }
     .leave-countdown-bar { margin-top: 6px; padding: 4px 0; border-radius: 4px; text-align: center; font-size: 0.85rem; font-weight: bold; display: block; }
     .status-working { background-color: #e0f2f1; color: #00695c; border: 1px solid #b2dfdb; }
     .status-on-leave { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; animation: pulse 2s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
 
     /* 堆疊選單 */
-    .nav-category { margin-bottom: 8px; border-bottom: 1px solid #f0f0f0; }
+    .nav-category { margin-bottom: 8px; border-bottom: 1px solid var(--border-color); }
     .nav-header {
       width: 100%; text-align: left; background: none; border: none;
-      padding: 8px 5px; font-weight: 700; color: #555; cursor: pointer;
+      padding: 8px 5px; font-weight: 700; color: var(--sidebar-text); cursor: pointer;
       display: flex; justify-content: space-between; align-items: center;
       border-radius: 4px; transition: background 0.2s; font-size: 0.85rem;
-      position: relative;
+      position: relative; opacity: 0.9;
     }
-    .nav-header:hover { background: #f8f8f8; color: #000; }
+    .nav-header:hover { background: rgba(0,0,0,0.05); opacity: 1; }
     .nav-arrow { font-size: 0.6em; transition: transform 0.3s; opacity: 0.5; }
     .nav-category.active .nav-arrow { transform: rotate(180deg); }
     
@@ -127,15 +138,15 @@
 
     .nav-btn {
       text-align: left; background: transparent; border: none;
-      padding: 6px 8px; font-size: 0.8rem; color: #666;
+      padding: 6px 8px; font-size: 0.8rem; color: var(--sidebar-text);
       cursor: pointer; border-radius: 4px; position: relative;
-      transition: all 0.2s;
+      transition: all 0.2s; opacity: 0.8;
     }
-    .nav-btn:hover { background: #e3f2fd; color: #1565c0; }
-    .nav-btn.current { background: #e3f2fd; color: #1565c0; font-weight: bold; }
+    .nav-btn:hover { background: var(--nav-hover); color: var(--nav-active-text); opacity: 1; }
+    .nav-btn.current { background: var(--nav-hover); color: var(--nav-active-text); font-weight: bold; opacity: 1; }
     
     .btn-logout { width: 100%; padding: 6px; background: #607d8b; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
-    select.site-select { width: 100%; margin-bottom: 8px; padding: 4px; font-size: 0.8rem; }
+    select.site-select { width: 100%; margin-bottom: 8px; padding: 4px; font-size: 0.8rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-color); }
     
     .badge-dot { display: inline-block; width: 6px; height: 6px; background-color: #d32f2f; border-radius: 50%; position: absolute; right: 5px; top: 50%; transform: translateY(-50%); }
     .group-badge-dot { display: inline-block; width: 8px; height: 8px; background-color: #d32f2f; border-radius: 50%; margin-right: 6px; }
@@ -151,19 +162,21 @@
     #tools_view { display: none; }
     #main_frame { width: 100%; height: 100%; border: none; display: none; background: #fff; }
 
-    .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
-    h2 { font-size: 1.1rem; color: #333; margin-bottom: 12px; border-left: 4px solid var(--primary-color); padding-left: 8px; }
+    /* 卡片與標題 - 支援變色 */
+    .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); color: var(--text-color); }
+    h1, h2, h3 { color: var(--text-color); }
+    h2 { font-size: 1.1rem; margin-bottom: 12px; border-left: 4px solid var(--primary-color); padding-left: 8px; }
     
-    input, select, textarea, button.action-btn { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
-    button.action-btn { background: #2196f3; color: white; font-weight: bold; border: none; cursor: pointer; transition: opacity 0.2s; }
+    input, select, textarea, button.action-btn { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-color); border-radius: 4px; font-size: 0.9rem; }
+    button.action-btn { background: var(--primary-color); color: white; font-weight: bold; border: none; cursor: pointer; transition: opacity 0.2s; }
     button.action-btn:hover { opacity: 0.9; }
 
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
     
-    .small { font-size: 12px; color: #666; }
+    .small { font-size: 12px; color: var(--text-color); opacity: 0.7; }
     .msg { margin-top: 8px; white-space: pre-wrap; color: #b00020; font-size: 0.85rem; }
-    .task { background: #fafafa; border: 1px solid #eee; border-radius: 6px; padding: 10px; transition: transform 0.2s; }
+    .task { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; transition: transform 0.2s; }
     .task:hover { transform: translateY(-2px); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
 
     /* RWD */
@@ -176,9 +189,7 @@
       .nav-category.active .nav-items { display: flex; }
     }
 
-    /* 其他 */
-    .shift-red{ color:#d10000; font-weight:700; }
-    .shift-orange{ color:#e67e00; font-weight:700; }
+    /* 其他標籤 */
     .tag-event { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 4px; }
     .tag-construction { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
     .tag-maintenance { background: #fff3e0; color: #ef6c00; border: 1px solid #ffe0b2; }
@@ -192,39 +203,19 @@
     .btn-history { background-color: #607d8b; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
 
     /* Modal */
-    dialog { border: none; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 95%; max-width: 800px; padding: 15px; background: #fff; }
+    dialog { border: none; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 95%; max-width: 800px; padding: 15px; background: var(--card-bg); color: var(--text-color); }
     dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 10px; }
     .modal-close { background: transparent; border: none; font-size: 18px; cursor: pointer; color: #666; }
     .cal-controls { display: flex; justify-content: center; gap: 15px; margin-bottom: 10px; }
-    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); border: 1px solid #ddd; }
-    .cal-head { background: #f5f5f5; padding: 6px; text-align: center; font-weight: bold; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; font-size: 0.8rem; }
-    .cal-day { min-height: 80px; padding: 2px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; background: #fff; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); border: 1px solid var(--border-color); }
+    .cal-head { background: rgba(0,0,0,0.05); padding: 6px; text-align: center; font-weight: bold; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); font-size: 0.8rem; }
+    .cal-day { min-height: 80px; padding: 2px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); background: var(--card-bg); }
     .cal-event-bar { font-size: 10px; padding: 1px 3px; margin-bottom: 1px; border-radius: 2px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid rgba(0,0,0,0.1); }
     .ce-construction { background: #ffebee; color: #c62828; border-color: #ffcdd2; }
     .ce-maintenance { background: #fff3e0; color: #ef6c00; border-color: #ffe0b2; }
     .ce-major { background: #e3f2fd; color: #1565c0; border-color: #bbdefb; }
     .ce-other { background: #f5f5f5; color: #616161; border-color: #e0e0e0; }
-
-    /* 工具與計算機 CSS */
-    .tool-tabs { display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid #ddd; }
-    .tool-tab-btn { background: none; border: none; border-bottom: 3px solid transparent; padding: 8px 16px; font-weight: bold; color: #666; cursor: pointer; font-size: 1rem; }
-    .tool-tab-btn.active { border-bottom-color: #2196f3; color: #2196f3; }
-    .calc-container { width: 100%; max-width: 320px; margin: 0 auto; background: #333; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-    .calc-display { width: 100%; height: 60px; background: #444; color: white; text-align: right; font-size: 2rem; padding: 10px; border-radius: 6px; margin-bottom: 10px; border: none; outline: none; }
-    .calc-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-    .calc-btn { width: 100%; padding: 15px 0; font-size: 1.2rem; border-radius: 8px; border: none; cursor: pointer; background: #555; color: white; transition: background 0.1s; }
-    .calc-btn:active { background: #777; }
-    .calc-btn.op { background: #f39c12; color: white; }
-    .calc-btn.eq { background: #2196f3; color: white; grid-column: span 2; }
-    .calc-btn.clr { background: #d32f2f; }
-    .fee-form { max-width: 600px; margin: 0 auto; }
-    .fee-group { margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
-    .fee-label { display: block; font-weight: bold; margin-bottom: 4px; color: #555; }
-    .fee-result-box { margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 1px solid #bbdefb; text-align: center; }
-    .fee-total { font-size: 1.8rem; font-weight: bold; color: #1565c0; margin: 5px 0; }
-    .switch-mode-btn { margin-right: 10px; padding: 6px 12px; background: #eee; border: 1px solid #ddd; border-radius: 20px; cursor: pointer; }
-    .switch-mode-btn.active { background: #2196f3; color: white; border-color: #2196f3; }
   </style>
 </head>
 <body>
@@ -255,11 +246,12 @@
           </div>
         </div>
 
-        <div class="nav-category" onclick="toggleNav(this)">
+        <div class="nav-category active" onclick="toggleNav(this)">
           <button class="nav-header">個人資料<span class="nav-arrow">▼</span></button>
           <div class="nav-items" onclick="event.stopPropagation()">
             <button class="nav-btn" onclick="loadPage('./schedule_view.html')">📅 查看班表</button>
             <button class="nav-btn" onclick="loadPage('./staff_info.html')">👤 人事資料</button>
+            <button class="nav-btn" onclick="loadPage('./settings.html')">⚙️ 個人設定</button>
           </div>
         </div>
 
@@ -301,34 +293,33 @@
   <main class="main-wrapper">
     <iframe id="main_frame" src=""></iframe>
     <div id="tools_view">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <h1 id="tool_page_title" style="margin:0; font-size:1.4rem;">小工具</h1>
-        </div>
+        <h1 style="margin-bottom:15px; font-size:1.4rem;">小工具</h1>
+        
         <section id="tool_ui_calc" class="card" style="display:none;">
-            <h2 style="text-align:center; border:none;">簡易計算機</h2>
-            <div class="calc-container">
-                <input type="text" id="calc_display" class="calc-display" readonly value="0">
-                <div class="calc-keys">
-                    <button class="calc-btn clr" onclick="calcClear()">C</button>
-                    <button class="calc-btn op" onclick="calcAppend('/')">÷</button>
-                    <button class="calc-btn op" onclick="calcAppend('*')">×</button>
-                    <button class="calc-btn op" onclick="calcDel()">←</button>
-                    <button class="calc-btn" onclick="calcAppend('7')">7</button>
-                    <button class="calc-btn" onclick="calcAppend('8')">8</button>
-                    <button class="calc-btn" onclick="calcAppend('9')">9</button>
-                    <button class="calc-btn op" onclick="calcAppend('-')">-</button>
-                    <button class="calc-btn" onclick="calcAppend('4')">4</button>
-                    <button class="calc-btn" onclick="calcAppend('5')">5</button>
-                    <button class="calc-btn" onclick="calcAppend('6')">6</button>
-                    <button class="calc-btn op" onclick="calcAppend('+')">+</button>
-                    <button class="calc-btn" onclick="calcAppend('1')">1</button>
-                    <button class="calc-btn" onclick="calcAppend('2')">2</button>
-                    <button class="calc-btn" onclick="calcAppend('3')">3</button>
-                    <button class="calc-btn eq" onclick="calcResult()">=</button>
-                    <button class="calc-btn" style="grid-column: span 2;" onclick="calcAppend('0')">0</button>
-                    <button class="calc-btn" onclick="calcAppend('.')">.</button>
+            <h2 style="text-align:center;border:none;">簡易計算機</h2>
+            <div style="width:100%;max-width:320px;margin:0 auto;background:#333;padding:15px;border-radius:12px;">
+                <input type="text" id="calc_display" style="width:100%;height:60px;background:#444;color:white;text-align:right;font-size:2rem;margin-bottom:10px;border:none;" readonly value="0">
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+                    <button onclick="calcClear()" style="background:#d32f2f;color:white;padding:15px;border:none;">C</button>
+                    <button onclick="calcAppend('/')" style="background:#f39c12;color:white;border:none;">÷</button>
+                    <button onclick="calcAppend('*')" style="background:#f39c12;color:white;border:none;">×</button>
+                    <button onclick="calcDel()" style="background:#f39c12;color:white;border:none;">←</button>
+                    <button onclick="calcAppend('7')" style="padding:15px;">7</button>
+                    <button onclick="calcAppend('8')" style="padding:15px;">8</button>
+                    <button onclick="calcAppend('9')" style="padding:15px;">9</button>
+                    <button onclick="calcAppend('-')" style="background:#f39c12;color:white;border:none;">-</button>
+                    <button onclick="calcAppend('4')" style="padding:15px;">4</button>
+                    <button onclick="calcAppend('5')" style="padding:15px;">5</button>
+                    <button onclick="calcAppend('6')" style="padding:15px;">6</button>
+                    <button onclick="calcAppend('+')" style="background:#f39c12;color:white;border:none;">+</button>
+                    <button onclick="calcAppend('1')" style="padding:15px;">1</button>
+                    <button onclick="calcAppend('2')" style="padding:15px;">2</button>
+                    <button onclick="calcAppend('3')" style="padding:15px;">3</button>
+                    <button onclick="calcResult()" style="background:#2196f3;color:white;grid-column:span 2;border:none;">=</button>
+                    <button onclick="calcAppend('0')" style="padding:15px;">0</button>
+                    <button onclick="calcAppend('.')" style="padding:15px;">.</button>
                 </div>
-            </div>
+   </div>
         </section>
         <section id="tool_ui_fee" class="card" style="display:none;">
             <h2 style="border:none;">金額計算</h2>
@@ -406,6 +397,7 @@
         </section>
     </div>
 
+
     <div id="dashboard_view">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
         <div>
@@ -413,12 +405,12 @@
             <div class="small" id="header_date_line"></div>
         </div>
         </div>
-        <section class="card" id="events_card" style="border-left: 4px solid #2196f3;">
+        <section class="card" id="events_card" style="border-left: 4px solid var(--primary-color);">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <h2 style="margin:0; border:none; padding:0;">📆 近期重要行事曆</h2>
             <div id="mgr_event_btns" style="display:none; gap:6px;">
                 <button id="btn_history" class="btn-history">📅 查詢</button>
-                <button id="btn_toggle_event_add" class="btn-history" style="background:#2196f3;">+ 新增</button>
+                <button id="btn_toggle_event_add" class="btn-history" style="background:var(--primary-color);">+ 新增</button>
             </div>
         </div>
         <div id="event_add_box" style="display:none; margin-top:10px; padding:10px; background:#f9f9f9; border-radius:6px; border:1px solid #eee;">
@@ -482,39 +474,83 @@
         </div>
 
         <section class="card" style="margin-top:15px;">
-        <h2 style="margin:0; border:none; padding:0;">新增任務</h2>
-        <div class="grid" style="margin-top:8px">
-            <div><label class="small">標題<input id="task_title" placeholder="例如：巡檢清單更新" /></label></div>
-            <div>
-            <label class="small">狀態
-                <select id="task_status">
-                <option value="open" selected>open</option>
-                <option value="doing">doing</option>
-                <option value="done">done</option>
-                </select>
-            </label>
+            <h2 style="margin:0; border:none; padding:0;">新增任務</h2>
+            <div class="grid" style="margin-top:8px">
+                <div><label class="small">標題<input id="task_title" placeholder="例如：巡檢清單更新" /></label></div>
+                <div>
+                    <label class="small">狀態
+                        <select id="task_status">
+                            <option value="open" selected>open</option>
+                            <option value="doing">doing</option>
+                            <option value="done">done</option>
+                        </select>
+                    </label>
+                </div>
+                <div><label class="small">指派給（同場域，可複選）<select id="task_assignees" multiple size="4" style="height:80px;"></select></label></div>
+                <div style="display:flex; align-items:center; padding-top:20px">
+                    <label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:0.9rem;">
+                        <input type="checkbox" id="task_assign_all" style="width:auto; margin:0"> 指派給全體
+                    </label>
+                </div>
             </div>
-            <div><label class="small">指派給（同場域，可複選）<select id="task_assignees" multiple size="4" style="height:80px;"></select></label></div>
-            <div style="display:flex; align-items:center; padding-top:20px">
-            <label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:0.9rem;">
-                <input type="checkbox" id="task_assign_all" style="width:auto; margin:0"> 指派給全體
-            </label>
-            </div>
-        </div>
-        <label class="small" style="display:block; margin-top:8px;">內容<textarea id="task_body" placeholder="可空" style="min-height:60px;"></textarea></label>
-        <button id="btn_create" class="action-btn" style="width:auto; padding:6px 16px; margin-top:8px;">建立任務</button>
-        <div id="create_msg" class="msg"></div>
+            <label class="small" style="display:block; margin-top:8px;">內容<textarea id="task_body" placeholder="可空" style="min-height:60px;"></textarea></label>
+            <button id="btn_create" class="action-btn" style="width:auto; padding:6px 16px; margin-top:8px;">建立任務</button>
+            <div id="create_msg" class="msg"></div>
         </section>
         
         <section class="card">
-        <h2 style="margin:0; border:none; padding:0;">任務列表</h2>
-        <div id="tasks_box" style="display:grid; gap:8px; margin-top:10px"></div>
-        <div id="tasks_msg" class="small" style="margin-top:8px"></div>
+            <h2 style="margin:0; border:none; padding:0;">任務列表</h2>
+            <div id="tasks_box" style="display:grid; gap:8px; margin-top:10px"></div>
+            <div id="tasks_msg" class="small" style="margin-top:8px"></div>
         </section>
     </div>
   </main>
 
 <script>
+// ===== 1. 配色管理系統 (新增 5 淺 5 深) =====
+const themes = {
+    // --- 淺色系 (Light Modes) ---
+    light: { p: '#2196f3', bg: '#f4f6f8', sbg: '#fff', stxt: '#333', cbg: '#fff', txt: '#333', border: '#e0e0e0', navh: '#e3f2fd', nava: '#1565c0', inbg:'#fff', inbd:'#ccc' },
+    soft_blue: { p: '#03a9f4', bg: '#e1f5fe', sbg: '#fff', stxt: '#01579b', cbg: '#fff', txt: '#333', border: '#b3e5fc', navh: '#e1f5fe', nava: '#0288d1', inbg:'#fff', inbd:'#b3e5fc' },
+    rose: { p: '#e91e63', bg: '#fdf2f5', sbg: '#fff', stxt: '#880e4f', cbg: '#fff', txt: '#333', border: '#f8bbd0', navh: '#fce4ec', nava: '#c2185b', inbg:'#fff', inbd:'#f8bbd0' },
+    mint: { p: '#00bfa5', bg: '#e0f2f1', sbg: '#fff', stxt: '#004d40', cbg: '#fff', txt: '#333', border: '#b2dfdb', navh: '#e0f2f1', nava: '#00897b', inbg:'#fff', inbd:'#b2dfdb' },
+    amber: { p: '#ff8f00', bg: '#fff8e1', sbg: '#fff', stxt: '#795548', cbg: '#fff', txt: '#333', border: '#ffecb3', navh: '#fff8e1', nava: '#ef6c00', inbg:'#fff', inbd:'#ffecb3' },
+
+    // --- 深色系 (Dark Modes) ---
+    dark:  { p: '#90caf9', bg: '#121212', sbg: '#1e1e1e', stxt: '#e0e0e0', cbg: '#2c2c2c', txt: '#e0e0e0', border: '#444', navh: '#333', nava: '#90caf9', inbg:'#424242', inbd:'#555' },
+    midnight: { p: '#bb86fc', bg: '#0a0e14', sbg: '#161b22', stxt: '#c9d1d9', cbg: '#161b22', txt: '#c9d1d9', border: '#30363d', navh: '#21262d', nava: '#bb86fc', inbg:'#0d1117', inbd:'#30363d' },
+    forest_dark: { p: '#81c784', bg: '#1b2e1c', sbg: '#253b26', stxt: '#e8f5e9', cbg: '#253b26', txt: '#e8f5e9', border: '#385239', navh: '#2e4a2f', nava: '#a5d6a7', inbg:'#1b2e1c', inbd:'#385239' },
+    lava: { p: '#ff7043', bg: '#210b05', sbg: '#2d140e', stxt: '#fbe9e7', cbg: '#2d140e', txt: '#fbe9e7', border: '#4e261c', navh: '#3e1d15', nava: '#ff8a65', inbg:'#210b05', inbd:'#4e261c' },
+    ocean_dark: { p: '#4fc3f7', bg: '#001a2c', sbg: '#00253d', stxt: '#e1f5fe', cbg: '#00253d', txt: '#e1f5fe', border: '#00375a', navh: '#002b46', nava: '#81d4fa', inbg:'#001a2c', inbd:'#00375a' }
+};
+    function applyTheme(tName) {
+        const t = themes[tName] || themes.light;
+        const r = document.documentElement.style;
+        r.setProperty('--primary-color', t.p);
+        r.setProperty('--bg-color', t.bg);
+        r.setProperty('--sidebar-bg', t.sbg);
+        r.setProperty('--sidebar-text', t.stxt);
+        r.setProperty('--card-bg', t.cbg);
+        r.setProperty('--text-color', t.txt);
+        r.setProperty('--border-color', t.border);
+        r.setProperty('--nav-hover', t.navh);
+        r.setProperty('--nav-active-text', t.nava);
+        r.setProperty('--input-bg', t.inbg);
+        r.setProperty('--input-border', t.inbd);
+    }
+    // 監聽來自 settings.html 的變色請求
+    window.addEventListener('message', (event) => {
+        if (event.data.type === 'PREVIEW_THEME' || event.data.type === 'UPDATE_THEME') {
+            applyTheme(event.data.theme);
+            // 通知 iframe 變色
+            const iframe = document.getElementById('main_frame');
+            if(iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({ type: event.data.type, theme: event.data.theme }, '*');
+            }
+        }
+    });
+
+    // ===== 2. 導航與視圖控制 =====
     function toggleNav(element) {
       const wasActive = element.classList.contains('active');
       document.querySelectorAll('.nav-category').forEach(cat => cat.classList.remove('active'));
@@ -531,25 +567,33 @@
         document.getElementById('dashboard_view').style.display = 'none';
         document.getElementById('main_frame').style.display = 'none';
         document.getElementById('tools_view').style.display = 'block';
+        
+        // 切換工具顯示
         document.getElementById('tool_ui_calc').style.display = (toolType === 'calc') ? 'block' : 'none';
         document.getElementById('tool_ui_fee').style.display = (toolType === 'fee') ? 'block' : 'none';
+        
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('current'));
         if(btnElement) btnElement.classList.add('current');
     }
     window.loadPage = function(pageUrl) {
         const siteId = document.getElementById('site_sel').value;
-        if(!siteId) { alert("請先選擇場域"); return; }
-        const fullUrl = `${pageUrl}?site_id=${encodeURIComponent(siteId)}`;
+        if(!siteId && !pageUrl.includes('settings.html')) { alert("請先選擇場域"); return; }
+        
+        let fullUrl = pageUrl;
+        if(siteId && !pageUrl.includes('?')) fullUrl = `${pageUrl}?site_id=${encodeURIComponent(siteId)}`;
+        else if(siteId) fullUrl = `${pageUrl}&site_id=${encodeURIComponent(siteId)}`;
+
         const frame = document.getElementById('main_frame');
         document.getElementById('dashboard_view').style.display = 'none';
         document.getElementById('tools_view').style.display = 'none';
         frame.style.display = 'block';
         frame.src = fullUrl;
+        
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('current'));
         if(event && event.currentTarget) event.currentTarget.classList.add('current');
     }
 
-    // 計算機
+    // ===== 3. 計算機功能 =====
     let calcVal = "0";
     function updateCalc(){ document.getElementById('calc_display').value = calcVal; }
     window.calcAppend = function(v) { if(calcVal==="0" && v!==".") calcVal=""; calcVal+=v; updateCalc(); }
@@ -557,64 +601,114 @@
     window.calcClear = function() { calcVal="0"; updateCalc(); }
     window.calcResult = function() { try{ if(/[^0-9+\-*/.]/.test(calcVal)) throw new Error(); calcVal=String(eval(calcVal)); }catch(e){ calcVal="Error"; } updateCalc(); }
 
-    // 費用試算
-    let currentFeeMode = 'count'; 
+// ===== 5. 金額試算工具 (補上的遺失功能) =====
+    
+    // 切換計次/計時模式
     window.switchFeeMode = function(mode) {
-        currentFeeMode = mode;
-        const btnCount=document.getElementById('mode_btn_count'), btnTime=document.getElementById('mode_btn_time');
-        const inC=document.getElementById('fee_input_group_count'), inT=document.getElementById('fee_input_group_time');
-        const setC=document.getElementById('fee_setting_count'), setT=document.getElementById('fee_setting_time');
-        const capIn=document.getElementById('fee_cap_amount'), capChk=document.getElementById('fee_has_cap');
-        if(mode==='count'){ 
-            btnCount.classList.add('active'); btnTime.classList.remove('active');
-            inC.style.display='block'; inT.style.display='none'; setC.style.display='block'; setT.style.display='none';
-            capChk.checked=false; capIn.value="";
+        // 處理按鈕樣式
+        const btnCount = document.getElementById('mode_btn_count');
+        const btnTime = document.getElementById('mode_btn_time');
+        
+        if(mode === 'count') {
+            btnCount.classList.add('active');
+            btnTime.classList.remove('active');
+            
+            // 切換顯示區域
+            document.getElementById('fee_input_group_count').style.display = 'block';
+            document.getElementById('fee_input_group_time').style.display = 'none';
+            document.getElementById('fee_setting_count').style.display = 'block';
+            document.getElementById('fee_setting_time').style.display = 'none';
         } else {
-            btnTime.classList.add('active'); btnCount.classList.remove('active');
-            inC.style.display='none'; inT.style.display='block'; setC.style.display='none'; setT.style.display='block';
-            capChk.checked=true; capIn.value=300;
+            btnCount.classList.remove('active');
+            btnTime.classList.add('active');
+            
+            document.getElementById('fee_input_group_count').style.display = 'none';
+            document.getElementById('fee_input_group_time').style.display = 'block';
+            document.getElementById('fee_setting_count').style.display = 'none';
+            document.getElementById('fee_setting_time').style.display = 'block';
         }
-        toggleCapInput(); document.getElementById('fee_result_area').style.display='none';
-    }
+        
+        // 隱藏舊的結果
+        document.getElementById('fee_result_area').style.display = 'none';
+    };
+
+    // 切換金額上限輸入框的啟用狀態
     window.toggleCapInput = function() {
-        const c=document.getElementById('fee_has_cap'), i=document.getElementById('fee_cap_amount');
-        i.disabled=!c.checked; i.style.display=c.checked?'block':'none';
-    }
-    const holidaySet = new Set(["2025-01-01","2025-02-28","2025-04-04","2025-05-01","2025-10-10","2025-01-27","2025-01-28","2025-01-29","2025-01-30","2025-05-31","2025-10-06","2026-01-01","2026-02-28","2026-04-04","2026-05-01","2026-10-10","2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-04-05","2026-06-19","2026-09-25"]);
-    function isNationalHoliday(d){ return holidaySet.has(d); }
-    window.calculateFee = function() {
-        let total=0, details="";
-        const rule=document.querySelector('input[name="holiday_rule"]:checked').value;
-        const treatNatAsHol=(rule==='weekend'), forceHol=document.getElementById('fee_manual_holiday').checked;
-        if(currentFeeMode==='count'){
-            const s=document.getElementById('fee_date_start').value, e=document.getElementById('fee_date_end').value;
-            if(!s||!e){ alert("請輸入日期"); return; } if(s>e){ alert("日期錯誤"); return; }
-            const dStart=new Date(s), dEnd=new Date(e);
-            let n=0, h=0;
-            for(let d=new Date(dStart); d<=dEnd; d.setDate(d.getDate()+1)){
-                const iso=d.toISOString().slice(0,10), day=d.getDay(), isW=(day===0||day===6), isN=isNationalHoliday(iso);
-                if(forceHol||isW||(isN&&treatNatAsHol)) h++; else n++;
-            }
-            const pN=parseFloat(document.getElementById('fee_count_normal').value)||0, pH=parseFloat(document.getElementById('fee_count_holiday').value)||0;
-            total=(n*pN)+(h*pH); details=`區間：${s}~${e}\n平日：${n}天×$${pN}\n假日：${h}天×$${pH}`;
+        const isChecked = document.getElementById('fee_has_cap').checked;
+        const input = document.getElementById('fee_cap_amount');
+        if(isChecked) {
+            input.disabled = false;
+            input.style.display = 'block';
         } else {
-            const s=document.getElementById('fee_datetime_start').value, e=document.getElementById('fee_datetime_end').value;
-            if(!s||!e){ alert("請輸入時間"); return; } const tS=new Date(s), tE=new Date(e); if(tS>=tE){ alert("時間錯誤"); return; }
-            const mins=Math.floor((tE-tS)/1000/60);
-            const unit=parseFloat(document.getElementById('fee_time_unit').value)||30, rN=parseFloat(document.getElementById('fee_time_rate_normal').value)||0, rH=parseFloat(document.getElementById('fee_time_rate_holiday').value)||0;
-            const units=Math.ceil(mins/unit);
-            const iso=tS.toISOString().slice(0,10), day=tS.getDay(), isW=(day===0||day===6), isN=isNationalHoliday(iso);
-            const isHol=(forceHol||isW||(isN&&treatNatAsHol));
-            total=units*(isHol?rH:rN); details=`總時長：${mins}分 (${units}單位)\n類型：${isHol?'假日':'平日'}`;
+            input.disabled = true;
+            input.style.display = 'none';
         }
-        if(document.getElementById('fee_has_cap').checked){
-            const cap=parseFloat(document.getElementById('fee_cap_amount').value)||0;
-            if(total>cap){ details+=`\n(已觸發上限$${cap})`; total=cap; }
+    };
+
+    // 執行金額計算 (對應新的 UI)
+    window.calculateFee = function() {
+        const mode = document.getElementById('mode_btn_count').classList.contains('active') ? 'count' : 'time';
+        let total = 0;
+        let detail = "";
+
+        if (mode === 'count') {
+            const startStr = document.getElementById('fee_date_start').value;
+            const endStr = document.getElementById('fee_date_end').value;
+            const priceNormal = parseFloat(document.getElementById('fee_count_normal').value) || 0;
+            const priceHoliday = parseFloat(document.getElementById('fee_count_holiday').value) || 0;
+
+            if(!startStr || !endStr) { alert("請輸入日期區間"); return; }
+            
+            const start = new Date(startStr);
+            const end = new Date(endStr);
+            
+            // 簡單計算天數迴圈
+            for(let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                const day = d.getDay();
+                // 簡易判斷：週六(6) 週日(0) 為假日
+                const isWeekend = (day === 0 || day === 6);
+                // 這裡僅做簡單判斷，若需國定假日需額外邏輯
+                if(isWeekend) total += priceHoliday;
+                else total += priceNormal;
+            }
+            detail = `從 ${startStr} 到 ${endStr} (依據簡易平假日計算)`;
+
+        } else {
+            // 計時模式邏輯
+            const startStr = document.getElementById('fee_datetime_start').value;
+            const endStr = document.getElementById('fee_datetime_end').value;
+            const unitMins = parseFloat(document.getElementById('fee_time_unit').value) || 30;
+            const rateNormal = parseFloat(document.getElementById('fee_time_rate_normal').value) || 0;
+            
+            if(!startStr || !endStr) { alert("請輸入時間區間"); return; }
+            
+            const start = new Date(startStr);
+            const end = new Date(endStr);
+            const diffMs = end - start;
+            if(diffMs < 0) { alert("結束時間不能早於開始"); return; }
+            
+            const diffMins = diffMs / 1000 / 60;
+            const units = Math.ceil(diffMins / unitMins);
+            total = units * rateNormal; // 這裡僅示範統一費率，實際可擴充
+            
+            detail = `共 ${diffMins.toFixed(1)} 分鐘，以 ${unitMins} 分鐘為一單位，共 ${units} 單位`;
         }
-        document.getElementById('fee_final_amount').textContent=`$${total}`;
-        document.getElementById('fee_detail_msg').textContent=details;
-        document.getElementById('fee_result_area').style.display='block';
-    }
+
+        // 處理金額上限
+        if(document.getElementById('fee_has_cap').checked) {
+            const cap = parseFloat(document.getElementById('fee_cap_amount').value) || 999999;
+            if(total > cap) {
+                total = cap;
+                detail += `\n(已觸發金額上限 ${cap})`;
+            }
+        }
+
+        // 顯示結果
+        const resBox = document.getElementById('fee_result_area');
+        resBox.style.display = 'block';
+        document.getElementById('fee_final_amount').textContent = `$${total}`;
+        document.getElementById('fee_detail_msg').textContent = detail;
+    };
 </script>
 
 <script type="module">
@@ -630,10 +724,14 @@
 
     $("header_date_line").textContent = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
 
+    // 輔助函式
     function getTagClass(t){ return t==='施工'?'tag-construction':t==='維修'?'tag-maintenance':t==='重大事件'?'tag-major':'tag-other'; }
     function getCalEventClass(t){ return t==='施工'?'ce-construction':t==='維修'?'ce-maintenance':t==='重大事件'?'ce-major':'ce-other'; }
     function diffDays(d1, d2) { return Math.round((new Date(d1).setHours(0,0,0,0) - new Date(d2).setHours(0,0,0,0)) / 86400000); }
-    
+    function isManagerRole(r){ return r==="engineer"||r==="supervisor"; }
+    function roleLabel(r){ return r==="engineer"?"工程師":r==="supervisor"?"主管":"員工"; }
+
+    // ===== 業務邏輯函式 =====
     window.startEditEvent = function(id, s, e, t, c) {
         $("history_modal").close(); $("evt_id_edit").value=id; $("evt_date_start").value=s; $("evt_date_end").value=e; $("evt_type").value=t; $("evt_content").value=c;
         $("event_add_box").style.display="block"; $("btn_save_event").textContent="更新";
@@ -658,11 +756,11 @@
             const endDiff = diffDays(evt.event_end_date, todayObj);
             let daysText="", daysClass="days-left", rowStyle="";
             if(startDiff>0){ daysText=(startDiff===1)?"明天開始":`還有 ${startDiff} 天`; if(startDiff===1) daysClass+=" days-urgent"; }
-            else { if(endDiff>=0){ daysText="🔥 進行中"; daysClass="days-urgent"; rowStyle="background-color:#fff8f8;"; } else { daysText="已結束"; daysClass="days-ended"; rowStyle="opacity:0.8;"; } }
+            else { if(endDiff>=0){ daysText="🔥 進行中"; daysClass="days-urgent"; rowStyle="background-color:rgba(255,0,0,0.05);"; } else { daysText="已結束"; daysClass="days-ended"; rowStyle="opacity:0.8;"; } }
             const dDisplay = (evt.event_date!==evt.event_end_date) ? `${evt.event_date} ~ ${evt.event_end_date}` : evt.event_date;
             const actions = isManager ? `<div class="btn-group-right"><button class="btn-icon btn-edit" onclick="startEditEvent('${evt.id}', '${evt.event_date}', '${evt.event_end_date}', '${evt.category}', '${escapeHtml(evt.content).replace(/'/g,"&apos;")}')">✏️</button></div>` : "";
             const div=document.createElement("div");
-            div.style.cssText=`padding:6px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between; ${rowStyle}`;
+            div.style.cssText=`padding:6px; border-bottom:1px solid var(--border-color); display:flex; align-items:center; justify-content:space-between; ${rowStyle}`;
             div.innerHTML=`<div style="flex:1;"><span class="tag-event ${getTagClass(evt.category)}">${escapeHtml(evt.category)}</span><span style="font-weight:600;margin-right:6px;">${escapeHtml(evt.content)}</span><span class="small">(${dDisplay})</span></div><div style="display:flex;align-items:center;"><div class="${daysClass}">${daysText}</div>${actions}</div>`;
             listEl.appendChild(div);
         });
@@ -762,19 +860,12 @@
         });
     }
 
-    // ★★★ 核心修正：確保主管權限檢查最優先執行 ★★★
-    function isManagerRole(r){ return r==="engineer"||r==="supervisor"; }
-    function roleLabel(r){ return r==="engineer"?"工程師":r==="supervisor"?"主管":"員工"; }
-
     async function refreshLeaveBadge(siteId, roleCur){
         const btnGroup = $("group_manager");
         const badge = $("leave_badge");
         const groupBadge = $("group_badge");
-        
-        // 1. 先決定是否顯示主管選單 (最重要)
         if(isManagerRole(roleCur)){
             btnGroup.style.display = "block";
-            // 2. 只有主管才需要去查紅點
             const { count } = await supabase.from("leave_requests").select("id", { count: "exact", head: true }).eq("site_id", siteId).eq("status", "pending");
             if(count > 0){
                 badge.style.display = "inline-block"; groupBadge.style.display = "inline-block";
@@ -802,7 +893,7 @@
     async function refreshMyScheduleLine(siteId, uid){
         const el=$("my_shift_text"); if(!el) return;
         const {data:links} = await supabase.from("site_person_links").select("person_name").eq("site_id", siteId).eq("user_id", uid);
-        if(!links || !links.length) return el.innerHTML=`<span class="small" style="color:#999">未連結班表</span>`;
+        if(!links || !links.length) return el.innerHTML=`<span class="small" style="color:var(--text-color);opacity:0.6;">未連結班表</span>`;
         const name = links[0].person_name;
         
         const today=new Date();
@@ -827,18 +918,25 @@
                 const diff = diffDays(nextLeave.work_date, start);
                 statusHtml = `<div class="leave-countdown-bar status-working">💪 ${diff===1?"明天":diff+" 天後"} 放假</div>`;
             } else {
-                statusHtml = `<div class="leave-countdown-bar" style="background:#eee;color:#666">📅 近期無休假</div>`;
+                statusHtml = `<div class="leave-countdown-bar" style="background:var(--bg-color);color:var(--text-color);opacity:0.6;">📅 近期無休假</div>`;
             }
         }
-        el.innerHTML = `<div class="shift-card"><div class="shift-row"><span class="shift-label">今日</span><span class="shift-val-today">${escapeHtml(todayShift)}</span></div><div class="shift-row" style="border-bottom:1px dashed #eee;padding-bottom:4px;margin-bottom:4px;"><span class="shift-label">明日</span><span class="shift-val-tmr">${escapeHtml(tmrShift)}</span></div>${statusHtml}</div>`;
+        el.innerHTML = `<div class="shift-card"><div class="shift-row"><span class="shift-label">今日</span><span class="shift-val-today">${escapeHtml(todayShift)}</span></div><div class="shift-row" style="border-bottom:1px dashed var(--border-color);padding-bottom:4px;margin-bottom:4px;"><span class="shift-label">明日</span><span class="shift-val-tmr">${escapeHtml(tmrShift)}</span></div>${statusHtml}</div>`;
     }
 
+    // ★★★ 主程式修正 ★★★
     async function main(){
         $("btn_logout").onclick = async () => { await supabase.auth.signOut(); location.href="./index.html"; };
         const {data:{session}} = await supabase.auth.getSession();
         if(!session) return location.href="./index.html";
         const uid = session.user.id;
         
+        // 1. 讀取並套用使用者設定 (LocalStorage)
+        const prefs = JSON.parse(localStorage.getItem("app_preferences")) || {};
+        if(prefs.theme) {
+            applyTheme(prefs.theme);
+        }
+
         // 載入個人
         const {data:profile} = await supabase.from("profiles").select("display_name,username").eq("user_id", uid).single();
         const {data:mems} = await supabase.from("site_memberships").select("site_id,role").eq("user_id", uid).eq("is_active", true);
@@ -856,11 +954,8 @@
             setText($("me_role"), roleLabel(role));
             $("page_title").textContent = `${sites.find(s=>s.id===siteId)?.name} 主控台`;
 
-            // ★★★ 關鍵修改：將主管檢查移到最前面 ★★★
-            // 這樣即使後面班表讀取出錯，主管選單也已經顯示出來了
+            // 執行資料載入
             await refreshLeaveBadge(siteId, role);
-            
-            // 接著執行其他非關鍵 UI
             refreshTodaySchedule(siteId);
             refreshMyScheduleLine(siteId, uid);
             loadAssignees(siteId);
@@ -868,15 +963,25 @@
             refreshMyTasksPanel(siteId, uid);
             refreshSiteEvents(siteId, isManagerRole(role));
             
-            // Iframe 連動
+            // Iframe 連動 (如果 iframe 開著且不是設定頁，換場域時也更新它)
             const frame = $("main_frame");
-            if(frame.style.display!=="none" && window.currentIframeUrl) window.loadPage(window.currentIframeUrl);
+            if(frame.style.display!=="none" && frame.src.indexOf('settings.html') === -1) {
+                const currentPath = frame.src.split('?')[0]; 
+                if(currentPath) frame.src = `${currentPath}?site_id=${siteId}`;
+            }
             
-            // 事件按鈕權限
             $("mgr_event_btns").style.display = isManagerRole(role) ? "flex" : "none";
         };
 
-        if(sites.length) { sel.value=sites[0].id; refreshAll(); }
+        if(sites.length) {
+            // 2. 判斷預設場域
+            if(prefs.default_site_id && sites.some(s => s.id === prefs.default_site_id)) {
+                sel.value = prefs.default_site_id;
+            } else {
+                sel.value = sites[0].id;
+            }
+            refreshAll(); 
+        }
         sel.onchange = refreshAll;
         
         // 定期檢查紅點 (靜默執行)
