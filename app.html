@@ -9,8 +9,7 @@
     :root {
       --sidebar-width: 180px; 
       --header-height: 50px;
-      
-      /* 預設值 (Light) - JS 會動態覆寫這些變數 */
+      /* 預設值 (Light) */
       --primary-color: #2196f3;
       --bg-color: #f4f6f8;
       --sidebar-bg: #fff;
@@ -292,6 +291,14 @@
 
   <main class="main-wrapper">
     <iframe id="main_frame" src=""></iframe>
+    
+    <div id="video_overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:black; z-index:99999; cursor:pointer;">
+        <video id="intro_video" style="width:100%; height:100%; object-fit:cover;" playsinline webkit-playsinline></video>
+        <div style="position:absolute; bottom:20px; right:20px; color:white; background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:4px; font-size:12px;">
+        點擊螢幕跳過並登出
+        </div>
+    </div>
+
     <div id="tools_view">
         <h1 style="margin-bottom:15px; font-size:1.4rem;">小工具</h1>
         
@@ -923,15 +930,65 @@ const themes = {
         }
         el.innerHTML = `<div class="shift-card"><div class="shift-row"><span class="shift-label">今日</span><span class="shift-val-today">${escapeHtml(todayShift)}</span></div><div class="shift-row" style="border-bottom:1px dashed var(--border-color);padding-bottom:4px;margin-bottom:4px;"><span class="shift-label">明日</span><span class="shift-val-tmr">${escapeHtml(tmrShift)}</span></div>${statusHtml}</div>`;
     }
+    
+    // ★★★ 登出過場播放函式 ★★★
+    async function playOutroAndLogout() {
+        const overlay = document.getElementById("video_overlay");
+        const video = document.getElementById("intro_video");
+        
+        // 定義真正的登出動作
+        const doLogout = async () => {
+             await supabase.auth.signOut(); 
+             location.href="./index.html";
+        };
 
-    // ★★★ 主程式修正 ★★★
+        // 取得影片連結 (使用 outro_video.mp4)
+        const { data } = supabase.storage.from("system_assets").getPublicUrl("outro_video.mp4");
+        const videoUrl = `${data.publicUrl}?t=${new Date().getTime()}`;
+
+        // 檢查影片是否存在，不存在直接登出
+        try {
+            const check = await fetch(videoUrl, { method: 'HEAD' });
+            if(!check.ok) throw new Error("No video");
+        } catch(e) {
+            doLogout(); 
+            return;
+        }
+
+        // 顯示介面並播放
+        overlay.style.display = "block";
+        video.src = videoUrl;
+
+        let isDone = false;
+        const finish = () => {
+            if(isDone) return;
+            isDone = true;
+            video.pause();
+            doLogout();
+        };
+
+        // 綁定事件
+        overlay.onclick = finish;
+        video.onended = finish;
+
+        try {
+            await video.play();
+        } catch(err) {
+            video.muted = true;
+            try { await video.play(); } catch(e) { finish(); }
+        }
+    }
+
+    // ★★★ 主程式 ★★★
     async function main(){
-        $("btn_logout").onclick = async () => { await supabase.auth.signOut(); location.href="./index.html"; };
+        // 綁定登出按鈕：使用新函式
+        $("btn_logout").onclick = () => { playOutroAndLogout(); };
+        
         const {data:{session}} = await supabase.auth.getSession();
         if(!session) return location.href="./index.html";
         const uid = session.user.id;
         
-        // 1. 讀取並套用使用者設定 (LocalStorage)
+        // 1. 讀取並套用使用者設定
         const prefs = JSON.parse(localStorage.getItem("app_preferences")) || {};
         if(prefs.theme) {
             applyTheme(prefs.theme);
@@ -963,7 +1020,6 @@ const themes = {
             refreshMyTasksPanel(siteId, uid);
             refreshSiteEvents(siteId, isManagerRole(role));
             
-            // Iframe 連動 (如果 iframe 開著且不是設定頁，換場域時也更新它)
             const frame = $("main_frame");
             if(frame.style.display!=="none" && frame.src.indexOf('settings.html') === -1) {
                 const currentPath = frame.src.split('?')[0]; 
@@ -974,7 +1030,6 @@ const themes = {
         };
 
         if(sites.length) {
-            // 2. 判斷預設場域
             if(prefs.default_site_id && sites.some(s => s.id === prefs.default_site_id)) {
                 sel.value = prefs.default_site_id;
             } else {
@@ -984,13 +1039,11 @@ const themes = {
         }
         sel.onchange = refreshAll;
         
-        // 定期檢查紅點 (靜默執行)
         setInterval(async()=>{
             const siteId=sel.value; const role=mems.find(m=>m.site_id===siteId)?.role||"";
             if(siteId) refreshLeaveBadge(siteId, role);
         }, 30000);
 
-        // 初始化其他UI事件
         $("cal_prev").onclick=()=>{calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();};
         $("cal_next").onclick=()=>{calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();};
         $("btn_history").onclick=async()=>{await loadCalendarEvents(sel.value);$("history_modal").showModal();};

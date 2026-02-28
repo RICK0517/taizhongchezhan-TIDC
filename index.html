@@ -6,44 +6,80 @@
   <title>登入</title>
   <style>
     *,*::before,*::after{box-sizing:border-box}
-    body{font-family:system-ui,Segoe UI,Arial;max-width:880px;margin:28px auto;padding:0 14px}
+    body{font-family:system-ui,Segoe UI,Arial;max-width:880px;margin:28px auto;padding:0 14px; transition: background 0.3s;}
     .row{display:grid;grid-template-columns:1fr;gap:16px}
-    .card{border:1px solid #ddd;border-radius:10px;padding:14px}
+    .card{border:1px solid #ddd;border-radius:10px;padding:14px;background:#fff;position: relative;}
     label{display:block;margin-top:10px}
-    input,select,button{width:100%;padding:10px;margin-top:6px;max-width:100%}
+    input,select,button{width:100%;padding:10px;margin-top:6px;max-width:100%;font-size:16px;}
     button{font-weight:700;cursor:pointer}
     .msg{margin-top:10px;color:#b00020;white-space:pre-wrap}
     .small{opacity:.75;font-size:13px;line-height:1.4}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap}
     code{background:#f6f6f6;padding:2px 6px;border-radius:6px}
+
+    /* 隱藏的讀卡機輸入框：移出視窗外，但保持可聚焦 */
+    #hidden_card_input {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+        opacity: 0;
+    }
+
+    /* 刷卡讀取時的狀態提示 */
+    #card_status_badge {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #333;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 12px;
+        opacity: 0.5;
+        transition: opacity 0.3s;
+        pointer-events: none;
+        z-index: 1000;
+    }
+    #card_status_badge.active { opacity: 1; background: #2e7d32; }
+    #card_status_badge.error { opacity: 1; background: #c62828; }
   </style>
 </head>
 <body>
+  <input type="password" id="hidden_card_input" autocomplete="off" />
+
   <div class="top">
     <div>
       <h1 style="margin:0">場域系統</h1>
-      <div class="small">靜態前端 + Supabase（只輸入帳號密碼）</div>
-    </div>
-    <div class="small">
-      內部登入識別：<code>username@corp.local</code>
+      <div class="small">支援鍵盤輸入或直接刷卡</div>
     </div>
   </div>
 
   <div class="row" style="margin-top:16px">
     <section class="card">
-      <h2 style="margin:0">登入</h2>
-      <label>帳號（username）
-        <input id="login_username" placeholder="例如：wangwei" autocomplete="username" />
+      <h2 style="margin:0">系統登入</h2>
+      <label>帳號 (Username)
+        <input id="login_username" class="manual-input" placeholder="例如：wangwei" autocomplete="username" />
       </label>
       <label>密碼
-        <input id="login_password" type="password" autocomplete="current-password" />
+        <input id="login_password" class="manual-input" type="password" autocomplete="current-password" />
       </label>
-      <button id="btn_login">登入</button>
+      <button id="btn_login" style="background-color:#2196f3; color:white; border:none;">登入</button>
+      
       <div id="login_msg" class="msg"></div>
-      <div class="small" style="margin-top:10px">
-        若忘記密碼，請聯絡工程師/主管協助重設。
+      
+      <div class="small" style="margin-top:15px; border-top:1px solid #eee; padding-top:10px; color:#666;">
+        💡 提示：若不輸入帳號密碼，直接感應識別證也可登入。
       </div>
     </section>
+  </div>
+
+  <div id="card_status_badge">💳 讀卡機待命模式</div>
+
+  <div id="video_overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:black; z-index:99999; cursor:pointer;">
+    <video id="intro_video" style="width:100%; height:100%; object-fit:cover;" playsinline webkit-playsinline></video>
+    <div style="position:absolute; bottom:20px; right:20px; color:white; background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:4px; font-size:12px;">
+      點擊螢幕跳過
+    </div>
   </div>
 
   <script type="module">
@@ -55,41 +91,121 @@
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const $ = (id) => document.getElementById(id);
+    const setMsg = (el, t) => { el.textContent = t||""; };
+    const toEmail = (u) => `${u.trim().toLowerCase()}@${AUTH_DOMAIN}`;
 
-    function toEmail(username){
-      return `${username.trim().toLowerCase()}@${AUTH_DOMAIN}`;
-    }
-
-    function setMsg(el, text){
-      el.textContent = text || "";
-    }
-
-    // 已登入直接跳主控台
+    // 檢查登入狀態
     const { data: sess } = await supabase.auth.getSession();
     if (sess.session) location.href = "./app.html";
 
+    // ★★★ 新增：播放 Intro 並跳轉 ★★★
+    async function playIntroAndRedirect() {
+        const overlay = $("video_overlay");
+        const video = $("intro_video");
+        const targetUrl = "./app.html";
+        
+        // 取得影片連結 (使用 intro_video.mp4)
+        const { data } = supabase.storage.from("system_assets").getPublicUrl("intro_video.mp4");
+        const videoUrl = data.publicUrl;
+
+        // 檢查影片是否有效，無效直接跳轉
+        try {
+            const check = await fetch(videoUrl, { method: 'HEAD' });
+            if(!check.ok) throw new Error("No video");
+        } catch(e) {
+            location.href = targetUrl;
+            return;
+        }
+
+        // 顯示介面
+        overlay.style.display = "block";
+        video.src = videoUrl;
+        
+        // 定義結束動作 (確保只執行一次)
+        let isDone = false;
+        const finish = () => {
+            if(isDone) return;
+            isDone = true;
+            video.pause();
+            location.href = targetUrl;
+        };
+
+        // 綁定事件
+        overlay.onclick = finish;
+        video.onended = finish;
+        
+        // 嘗試播放
+        try {
+            await video.play();
+        } catch(err) {
+            video.muted = true;
+            try { await video.play(); } catch(e) { finish(); }
+        }
+    }
+
+    // ===== 1. 手動登入邏輯 =====
     $("btn_login").addEventListener("click", async () => {
-      setMsg($("login_msg"), "");
-      const username = $("login_username").value;
-      const password = $("login_password").value;
+        setMsg($("login_msg"), "登入中...");
+        const u = $("login_username").value;
+        const p = $("login_password").value;
+        if (!u || !p) return setMsg($("login_msg"), "請輸入帳號密碼");
 
-      if (!username || !password){
-        setMsg($("login_msg"), "請輸入帳號與密碼");
-        return;
-      }
-
-      const { error } = await supabase.auth.signInWithPassword({
-        email: toEmail(username),
-        password
-      });
-
-      if (error){
-        setMsg($("login_msg"), error.message);
-        return;
-      }
-
-      location.href = "./app.html";
+        const { error } = await supabase.auth.signInWithPassword({ email: toEmail(u), password: p });
+        if (error) setMsg($("login_msg"), error.message);
+        else {
+            setMsg($("login_msg"), "登入成功，載入中...");
+            playIntroAndRedirect(); // 播放影片
+        }
     });
+
+    // ===== 2. 自動刷卡監聽邏輯 =====
+    const cardInput = $("hidden_card_input");
+    const badge = $("card_status_badge");
+    const manualInputs = ["login_username", "login_password"];
+
+    function focusGuard() {
+        const activeId = document.activeElement ? document.activeElement.id : "";
+        if (!manualInputs.includes(activeId)) {
+            cardInput.focus({ preventScroll: true });
+        }
+    }
+
+    setInterval(focusGuard, 500);
+    document.addEventListener("click", (e) => { setTimeout(focusGuard, 100); });
+
+    cardInput.addEventListener("keydown", async (e) => {
+        if (e.key === "Enter") {
+            const code = cardInput.value.trim();
+            if(!code) return; 
+
+            badge.textContent = "🔄 讀取中...";
+            badge.className = "active";
+            setMsg($("login_msg"), "💳 偵測到卡片，驗證身分中...");
+
+            try {
+                const { data, error: dbError } = await supabase.from("card_logins").select("email, password").eq("card_uid", code).single();
+                if (dbError || !data) throw new Error("卡片未註冊或無效");
+
+                const { error: authError } = await supabase.auth.signInWithPassword({ email: data.email, password: data.password });
+                if (authError) throw authError;
+
+                badge.textContent = "✅ 驗證成功";
+                setMsg($("login_msg"), "驗證成功，跳轉中...");
+                
+                playIntroAndRedirect(); // 播放影片
+
+            } catch (err) {
+                console.error(err);
+                badge.textContent = "❌ 錯誤";
+                badge.className = "error";
+                setMsg($("login_msg"), `刷卡登入失敗：${err.message}`);
+                cardInput.value = "";
+                setTimeout(() => { badge.textContent = "💳 讀卡機待命模式"; badge.className = ""; }, 2000);
+            }
+        }
+    });
+
+    focusGuard();
   </script>
 </body>
 </html>
