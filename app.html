@@ -992,11 +992,27 @@ const themes = {
         if(!session) return location.href="./index.html";
         const uid = session.user.id;
         
-        // 1. 讀取並套用使用者設定
-        const prefs = JSON.parse(localStorage.getItem("app_preferences")) || {};
+        // ===== 1. 修改：讀取並套用使用者專屬設定 =====
+        const userPrefKey = `prefs_${uid}`;
+        let prefs = {};
+        try {
+            const userJson = localStorage.getItem(userPrefKey);
+            if (userJson) {
+                prefs = JSON.parse(userJson);
+                // ★ 關鍵：將此使用者的設定同步回通用的 'app_preferences'
+                // 這樣 theme.js (子頁面) 讀取通用 Key 時，就會顯示當前使用者的顏色
+                localStorage.setItem("app_preferences", userJson);
+            } else {
+                // 預設值
+                prefs = { theme: 'light', default_site_id: '' }; 
+                localStorage.setItem("app_preferences", JSON.stringify(prefs));
+            }
+        } catch(e) { console.error(e); }
+
         if(prefs.theme) {
             applyTheme(prefs.theme);
         }
+        // ============================================
 
         // 載入個人
         const {data:profile} = await supabase.from("profiles").select("display_name,username").eq("user_id", uid).single();

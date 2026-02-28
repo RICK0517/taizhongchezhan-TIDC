@@ -128,15 +128,23 @@
     const $ = id => document.getElementById(id);
 
     // 設定與偏好
-    const STORAGE_KEY = "app_preferences";
-    let prefs = JSON.parse(localStorage.getItem(STORAGE_KEY)) || { default_site_id: "", theme: "light" };
     const BUCKET_NAME = "system_assets";
     let currentUid = null;
+    let prefs = { default_site_id: "", theme: "light" };
 
     async function init(){
         const { data: { session } } = await supabase.auth.getSession();
         if(!session) { location.href="./index.html"; return; }
         currentUid = session.user.id;
+
+        // ===== 1. 修改：根據 User ID 讀取設定來回填選單 =====
+        const userPrefKey = `prefs_${currentUid}`;
+        try {
+            const saved = JSON.parse(localStorage.getItem(userPrefKey)) || {};
+            if(saved.theme) prefs.theme = saved.theme;
+            if(saved.default_site_id) prefs.default_site_id = saved.default_site_id;
+        } catch(e) {}
+        // ===================================================
 
         // 載入場域
         const { data: mems } = await supabase.from("site_memberships").select("site_id").eq("user_id", currentUid).eq("is_active", true);
@@ -168,16 +176,31 @@
     };
 
     window.saveSettings = () => {
-        const newPrefs = { default_site_id: $("default_site_sel").value, theme: $("selected_theme").value };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newPrefs));
+        if(!currentUid) return alert("無法識別使用者 ID");
+
+        const newPrefs = { 
+            default_site_id: $("default_site_sel").value, 
+            theme: $("selected_theme").value 
+        };
+        const jsonStr = JSON.stringify(newPrefs);
+
+        // ===== 2. 修改：同時儲存兩份 (全域 + 個人) =====
+        // 存入「通用 Key」 (讓當前的 theme.js 和 app.html 馬上生效)
+        localStorage.setItem("app_preferences", jsonStr);
+
+        // 存入「使用者專屬 Key」 (prefs_使用者ID) (為了下次登入記得)
+        localStorage.setItem(`prefs_${currentUid}`, jsonStr);
+        // ==============================================
+
+        // 通知父視窗變色
         window.parent.postMessage({ type: 'UPDATE_THEME', theme: newPrefs.theme }, '*');
-        $("msg").style.display = "block"; setTimeout(() => $("msg").style.display = "none", 3000);
+        $("msg").style.display = "block"; 
+        setTimeout(() => $("msg").style.display = "none", 3000);
     };
 
-    // --- 影片上傳邏輯 (修改：加上 User ID 路徑) ---
+    // --- 影片上傳邏輯 ---
     async function checkVideo(type) {
         if(!currentUid) return;
-        // 檔名格式：User_ID/type.mp4
         const fileName = `${currentUid}/${type}.mp4`;
         const vidId = type === 'intro' ? 'vid_intro' : 'vid_outro';
         const boxId = type === 'intro' ? 'preview_intro_box' : 'preview_outro_box';
@@ -196,7 +219,6 @@
 
     window.uploadVideo = async function(type) {
         if(!currentUid) return;
-        // 檔名格式：User_ID/type.mp4
         const fileName = `${currentUid}/${type}.mp4`;
         
         const fileInput = $(type === 'intro' ? 'file_intro' : 'file_outro');
