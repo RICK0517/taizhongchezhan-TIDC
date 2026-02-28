@@ -17,7 +17,6 @@
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap}
     code{background:#f6f6f6;padding:2px 6px;border-radius:6px}
 
-    /* 隱藏的讀卡機輸入框：移出視窗外，但保持可聚焦 */
     #hidden_card_input {
         position: absolute;
         top: -9999px;
@@ -25,7 +24,6 @@
         opacity: 0;
     }
 
-    /* 刷卡讀取時的狀態提示 */
     #card_status_badge {
         position: fixed;
         bottom: 20px;
@@ -94,34 +92,33 @@
     const setMsg = (el, t) => { el.textContent = t||""; };
     const toEmail = (u) => `${u.trim().toLowerCase()}@${AUTH_DOMAIN}`;
 
-    // 檢查登入狀態
     const { data: sess } = await supabase.auth.getSession();
     if (sess.session) location.href = "./app.html";
 
-    // ★★★ 新增：播放 Intro 並跳轉 ★★★
-    async function playIntroAndRedirect() {
+    // ★★★ 修改：播放函式接收 userId ★★★
+    async function playIntroAndRedirect(userId) {
         const overlay = $("video_overlay");
         const video = $("intro_video");
         const targetUrl = "./app.html";
         
-        // 取得影片連結 (使用 intro_video.mp4)
-        const { data } = supabase.storage.from("system_assets").getPublicUrl("intro_video.mp4");
+        // ★ 重點：路徑改為 userId/intro.mp4 ★
+        const fileName = `${userId}/intro.mp4`;
+        const { data } = supabase.storage.from("system_assets").getPublicUrl(fileName);
         const videoUrl = data.publicUrl;
 
-        // 檢查影片是否有效，無效直接跳轉
+        // 檢查該使用者是否有設定影片
         try {
             const check = await fetch(videoUrl, { method: 'HEAD' });
-            if(!check.ok) throw new Error("No video");
+            if(!check.ok) throw new Error("No personal video");
         } catch(e) {
-            location.href = targetUrl;
+            location.href = targetUrl; // 沒設定就直接跳轉
             return;
         }
 
-        // 顯示介面
+        // 有影片則播放
         overlay.style.display = "block";
         video.src = videoUrl;
         
-        // 定義結束動作 (確保只執行一次)
         let isDone = false;
         const finish = () => {
             if(isDone) return;
@@ -130,11 +127,9 @@
             location.href = targetUrl;
         };
 
-        // 綁定事件
         overlay.onclick = finish;
         video.onended = finish;
         
-        // 嘗試播放
         try {
             await video.play();
         } catch(err) {
@@ -150,11 +145,12 @@
         const p = $("login_password").value;
         if (!u || !p) return setMsg($("login_msg"), "請輸入帳號密碼");
 
-        const { error } = await supabase.auth.signInWithPassword({ email: toEmail(u), password: p });
+        const { data, error } = await supabase.auth.signInWithPassword({ email: toEmail(u), password: p });
         if (error) setMsg($("login_msg"), error.message);
         else {
             setMsg($("login_msg"), "登入成功，載入中...");
-            playIntroAndRedirect(); // 播放影片
+            // ★ 傳入 data.user.id
+            playIntroAndRedirect(data.user.id); 
         }
     });
 
@@ -183,16 +179,17 @@
             setMsg($("login_msg"), "💳 偵測到卡片，驗證身分中...");
 
             try {
-                const { data, error: dbError } = await supabase.from("card_logins").select("email, password").eq("card_uid", code).single();
-                if (dbError || !data) throw new Error("卡片未註冊或無效");
+                const { data: userData, error: dbError } = await supabase.from("card_logins").select("email, password").eq("card_uid", code).single();
+                if (dbError || !userData) throw new Error("卡片未註冊或無效");
 
-                const { error: authError } = await supabase.auth.signInWithPassword({ email: data.email, password: data.password });
+                const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email: userData.email, password: userData.password });
                 if (authError) throw authError;
 
                 badge.textContent = "✅ 驗證成功";
                 setMsg($("login_msg"), "驗證成功，跳轉中...");
                 
-                playIntroAndRedirect(); // 播放影片
+                // ★ 傳入 authData.user.id
+                playIntroAndRedirect(authData.user.id);
 
             } catch (err) {
                 console.error(err);

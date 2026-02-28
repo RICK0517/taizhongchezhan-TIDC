@@ -293,7 +293,7 @@
     <iframe id="main_frame" src=""></iframe>
     
     <div id="video_overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:black; z-index:99999; cursor:pointer;">
-        <video id="intro_video" style="width:100%; height:100%; object-fit:cover;" playsinline webkit-playsinline></video>
+        <video id="intro_video" style="width:100%; height:100%; object-fit:contain;" playsinline webkit-playsinline></video>
         <div style="position:absolute; bottom:20px; right:20px; color:white; background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:4px; font-size:12px;">
         點擊螢幕跳過並登出
         </div>
@@ -931,7 +931,7 @@ const themes = {
         el.innerHTML = `<div class="shift-card"><div class="shift-row"><span class="shift-label">今日</span><span class="shift-val-today">${escapeHtml(todayShift)}</span></div><div class="shift-row" style="border-bottom:1px dashed var(--border-color);padding-bottom:4px;margin-bottom:4px;"><span class="shift-label">明日</span><span class="shift-val-tmr">${escapeHtml(tmrShift)}</span></div>${statusHtml}</div>`;
     }
     
-    // ★★★ 登出過場播放函式 ★★★
+    // ★★★ 修改：登出前播放個人影片 ★★★
     async function playOutroAndLogout() {
         const overlay = document.getElementById("video_overlay");
         const video = document.getElementById("intro_video");
@@ -942,14 +942,20 @@ const themes = {
              location.href="./index.html";
         };
 
-        // 取得影片連結 (使用 outro_video.mp4)
-        const { data } = supabase.storage.from("system_assets").getPublicUrl("outro_video.mp4");
+        // 取得當前 User ID
+        const {data:{session}} = await supabase.auth.getSession();
+        if(!session) { doLogout(); return; }
+        const uid = session.user.id;
+
+        // ★ 重點：路徑改為 userId/outro.mp4 ★
+        const fileName = `${uid}/outro.mp4`;
+        const { data } = supabase.storage.from("system_assets").getPublicUrl(fileName);
         const videoUrl = `${data.publicUrl}?t=${new Date().getTime()}`;
 
-        // 檢查影片是否存在，不存在直接登出
+        // 檢查該使用者是否有設定影片
         try {
             const check = await fetch(videoUrl, { method: 'HEAD' });
-            if(!check.ok) throw new Error("No video");
+            if(!check.ok) throw new Error("No personal video");
         } catch(e) {
             doLogout(); 
             return;
@@ -967,7 +973,6 @@ const themes = {
             doLogout();
         };
 
-        // 綁定事件
         overlay.onclick = finish;
         video.onended = finish;
 
@@ -981,7 +986,6 @@ const themes = {
 
     // ★★★ 主程式 ★★★
     async function main(){
-        // 綁定登出按鈕：使用新函式
         $("btn_logout").onclick = () => { playOutroAndLogout(); };
         
         const {data:{session}} = await supabase.auth.getSession();

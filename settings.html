@@ -83,35 +83,35 @@
     <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
 
     <div>
-      <div class="section-label">3. 登入/登出 過場動畫</div>
-      <div class="hint" style="margin-bottom:15px;">點擊螢幕可跳過影片。檔案大小限制 100MB。</div>
+      <div class="section-label">3. 個人化登入/登出動畫</div>
+      <div class="hint" style="margin-bottom:15px;">此影片僅供您個人使用。若未設定，則不會播放動畫。</div>
       
       <div class="upload-box">
-          <div class="upload-title">🎬 登入影片 (Intro)</div>
+          <div class="upload-title">🎬 您的登入影片 (Intro)</div>
           <input type="file" id="file_intro" accept="video/mp4,video/webm">
           
           <div class="progress-bar" id="p_bar_intro"><div class="progress-fill" id="p_fill_intro"></div></div>
           <div id="msg_intro" class="err-msg" style="color:#333;"></div>
           
-          <button id="btn_intro" class="btn-upload" onclick="uploadVideo('intro')">⬆️ 上傳登入影片</button>
+          <button id="btn_intro" class="btn-upload" onclick="uploadVideo('intro')">⬆️ 上傳個人登入影片</button>
 
           <div class="preview-box" id="preview_intro_box">
-            <div style="color:#fff; font-size:12px; margin-bottom:5px;">目前登入影片：</div>
+            <div style="color:#fff; font-size:12px; margin-bottom:5px;">目前設定：</div>
             <video id="vid_intro" controls playsinline></video>
           </div>
       </div>
 
       <div class="upload-box">
-          <div class="upload-title">👋 登出影片 (Outro)</div>
+          <div class="upload-title">👋 您的登出影片 (Outro)</div>
           <input type="file" id="file_outro" accept="video/mp4,video/webm">
           
           <div class="progress-bar" id="p_bar_outro"><div class="progress-fill" id="p_fill_outro"></div></div>
           <div id="msg_outro" class="err-msg" style="color:#333;"></div>
           
-          <button id="btn_outro" class="btn-upload" onclick="uploadVideo('outro')">⬆️ 上傳登出影片</button>
+          <button id="btn_outro" class="btn-upload" onclick="uploadVideo('outro')">⬆️ 上傳個人登出影片</button>
 
           <div class="preview-box" id="preview_outro_box">
-            <div style="color:#fff; font-size:12px; margin-bottom:5px;">目前登出影片：</div>
+            <div style="color:#fff; font-size:12px; margin-bottom:5px;">目前設定：</div>
             <video id="vid_outro" controls playsinline></video>
           </div>
       </div>
@@ -131,14 +131,15 @@
     const STORAGE_KEY = "app_preferences";
     let prefs = JSON.parse(localStorage.getItem(STORAGE_KEY)) || { default_site_id: "", theme: "light" };
     const BUCKET_NAME = "system_assets";
+    let currentUid = null;
 
     async function init(){
         const { data: { session } } = await supabase.auth.getSession();
         if(!session) { location.href="./index.html"; return; }
-        const uid = session.user.id;
+        currentUid = session.user.id;
 
         // 載入場域
-        const { data: mems } = await supabase.from("site_memberships").select("site_id").eq("user_id", uid).eq("is_active", true);
+        const { data: mems } = await supabase.from("site_memberships").select("site_id").eq("user_id", currentUid).eq("is_active", true);
         if(mems && mems.length > 0){
             const siteIds = mems.map(m => m.site_id);
             const { data: sites } = await supabase.from("sites").select("id, name").in("id", siteIds);
@@ -173,10 +174,11 @@
         $("msg").style.display = "block"; setTimeout(() => $("msg").style.display = "none", 3000);
     };
 
-    // --- 影片上傳邏輯 (通用) ---
+    // --- 影片上傳邏輯 (修改：加上 User ID 路徑) ---
     async function checkVideo(type) {
-        // type 傳入 'intro' 或 'outro'
-        const fileName = type === 'intro' ? 'intro_video.mp4' : 'outro_video.mp4';
+        if(!currentUid) return;
+        // 檔名格式：User_ID/type.mp4
+        const fileName = `${currentUid}/${type}.mp4`;
         const vidId = type === 'intro' ? 'vid_intro' : 'vid_outro';
         const boxId = type === 'intro' ? 'preview_intro_box' : 'preview_outro_box';
 
@@ -193,7 +195,10 @@
     }
 
     window.uploadVideo = async function(type) {
-        const fileName = type === 'intro' ? 'intro_video.mp4' : 'outro_video.mp4';
+        if(!currentUid) return;
+        // 檔名格式：User_ID/type.mp4
+        const fileName = `${currentUid}/${type}.mp4`;
+        
         const fileInput = $(type === 'intro' ? 'file_intro' : 'file_outro');
         const msg = $(type === 'intro' ? 'msg_intro' : 'msg_outro');
         const btn = $(type === 'intro' ? 'btn_intro' : 'btn_outro');
