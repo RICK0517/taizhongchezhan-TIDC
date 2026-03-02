@@ -85,7 +85,7 @@
         <label>檢查頻率 (天)</label>
         <input type="number" id="inp_freq" value="7" min="1">
         
-        <label>指派負責人 (按住 Ctrl 可複選)</label>
+        <label>指派負責人 </label>
         <select id="inp_users" multiple style="height:120px;"></select>
         
         <div style="display:flex;gap:10px;margin-top:20px;">
@@ -117,9 +117,21 @@
         const {data:mem} = await supabase.from("site_memberships").select("role").eq("user_id", myUid).eq("site_id", siteId).maybeSingle();
         myRole = mem ? mem.role : "employee";
 
+        // ★★★ 修改：不只取得名字，還取得角色資訊，以便過濾工程師 ★★★
+        // 先取得所有人資料
         const {data:users} = await supabase.rpc("get_site_people", { p_site_id: siteId });
-        allUsers = users || [];
-        allUsers.forEach(u => { userMap[u.user_id] = u.display_name || u.username; });
+        // 再取得該場域所有成員的角色
+        const {data:members} = await supabase.from("site_memberships").select("user_id, role").eq("site_id", siteId);
+        
+        // 建立角色對照表
+        const roleMap = {};
+        if(members) members.forEach(m => roleMap[m.user_id] = m.role);
+
+        // 過濾：排除 role 為 engineer 的使用者
+        allUsers = (users || []).filter(u => roleMap[u.user_id] !== 'engineer');
+
+        // 建立 ID 對應名字表
+        (users || []).forEach(u => { userMap[u.user_id] = u.display_name || u.username; });
 
         renderUserSelect();
         if(isManager()){
@@ -185,8 +197,11 @@
                 ? `${item.last_check_date} ｜ ${lastCheckerName} ｜ 數量：${item.last_check_quantity || "-"}` 
                 : "無紀錄";
             
-            const assignedNames = allUsers.filter(u => (item.assigned_user_ids||[]).includes(u.user_id))
-                                          .map(u => u.display_name || u.username).join(", ");
+            // 這裡顯示負責人時，若原始資料有包含工程師(可能以前指派的)，會因為 userMap 包含所有人而正常顯示名字
+            const assignedNames = (item.assigned_user_ids||[])
+                .map(uid => userMap[uid] || "未知")
+                .join(", ");
+                
             const isAssigned = (item.assigned_user_ids||[]).includes(myUid);
             const assignedTag = isAssigned ? `<span style="font-size:11px;background:#e3f2fd;color:#1565c0;padding:2px 6px;border-radius:4px;margin-left:6px;">負責</span>` : "";
 
@@ -310,6 +325,7 @@
     function renderUserSelect(){
         const sel = $("inp_users");
         sel.innerHTML = "";
+        // 這裡的 allUsers 已經在 init() 中過濾掉 engineer 了
         allUsers.forEach(u => {
             const opt = document.createElement("option");
             opt.value = u.user_id;

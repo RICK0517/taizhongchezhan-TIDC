@@ -513,7 +513,6 @@
                 <div style="display:flex; align-items:center; padding-top:20px">
                     <label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:0.9rem;">
                         <input type="checkbox" id="task_assign_all" style="width:auto; margin:0"> 指派給全體
-                    </label>
                 </div>
             </div>
             <label class="small" style="display:block; margin-top:8px;">內容<textarea id="task_body" placeholder="可空" style="min-height:60px;"></textarea></label>
@@ -828,18 +827,39 @@ const themes = {
         const r = await supabase.rpc("get_site_people", { p_site_id: siteId });
         return { error: r.error, people: (r.data||[]).map(x=>({user_id:x.user_id, name:x.display_name||x.user_id})) };
     }
+    
+    // ★★★ 修改：載入人員時過濾掉工程師 ★★★
     async function loadAssignees(siteId){
         const sel=$("task_assignees"); sel.innerHTML="";
-        const {people} = await getSitePeople(siteId);
-        people.forEach(p => { const o=document.createElement("option"); o.value=p.user_id; o.textContent=p.name; sel.appendChild(o); });
+        
+        // 使用 site_memberships 與 profiles 聯集查詢以取得角色資訊
+        const { data: members, error } = await supabase
+            .from('site_memberships')
+            .select('user_id, role, profiles(display_name, username)')
+            .eq('site_id', siteId);
+            
+        if(error || !members) return;
+
+        // 過濾掉 engineer，只留下 supervisor 和 employee
+        const validMembers = members.filter(m => m.role !== 'engineer');
+
+        validMembers.forEach(m => { 
+            const name = m.profiles?.display_name || m.profiles?.username || m.user_id;
+            const o = document.createElement("option"); 
+            o.value = m.user_id; 
+            o.textContent = name; 
+            sel.appendChild(o); 
+        });
     }
 
-    async function refreshTasks(siteId, uid){
+    async function refreshTasks(siteId, uid, role){
         const box=$("tasks_box"); box.innerHTML=""; setText($("tasks_msg"),"讀取中...");
         const {data:rows} = await supabase.from("tasks").select("*").eq("site_id", siteId).order("created_at",{ascending:false});
         if(!rows || !rows.length){ setText($("tasks_msg"),"無任務"); return; }
         setText($("tasks_msg"), `共 ${rows.length} 筆`);
+        
         const {people} = await getSitePeople(siteId); const nameMap={}; people.forEach(p=>nameMap[p.user_id]=p.name);
+        
         const tIds=rows.map(r=>r.id);
         const {data:assData} = await supabase.from("task_assignees").select("*").in("task_id", tIds);
         const {data:compData} = await supabase.from("task_completions").select("*").in("task_id", tIds);
@@ -849,9 +869,14 @@ const themes = {
         
         rows.forEach(r => {
             const explicit = assMap[r.id] || [];
-            const assNames = r.assign_all ? "全體" : (explicit.length ? explicit.map(u=>nameMap[u]||u).join("、") : "未指派");
+            // 若是指派全體，顯示「全體 (不含工程師)」
+            const assNames = r.assign_all ? "全體 (不含工程師)" : (explicit.length ? explicit.map(u=>nameMap[u]||u).join("、") : "未指派");
             const doneLine = (compMap[r.id]||[]).slice(0,3).map(x=>(nameMap[x.user_id]||x.user_id)).join(", ");
-            const canComp = (r.assign_all || explicit.includes(uid)) && !(compMap[r.id]||[]).some(x=>x.user_id===uid) && r.status!=="done";
+            
+            // ★★★ 修改：如果是工程師，即使是 assign_all 也不算在任務內，除非是他自己建立的 ★★★
+            // 邏輯：(是指派給全體 且 我不是工程師) 或 (我有被明確指派) 或 (是我建立的)
+            const isAssignedToMe = (r.assign_all && role !== 'engineer') || explicit.includes(uid);
+            const canComp = isAssignedToMe && !(compMap[r.id]||[]).some(x=>x.user_id===uid) && r.status!=="done";
             
             const div=document.createElement("div"); div.className="task";
             div.innerHTML=`<div style="display:flex;justify-content:space-between;"><strong>${escapeHtml(r.title)}</strong><span class="small">${new Date(r.created_at).toLocaleDateString()}</span></div>
@@ -861,19 +886,27 @@ const themes = {
             ${canComp?`<button class="action-btn" style="width:auto;padding:2px 8px;font-size:12px;margin-top:6px;">標記完成</button>`:""}`;
             if(canComp) div.querySelector("button").onclick = async () => {
                 await supabase.from("task_completions").insert({task_id:r.id, user_id:uid});
-                refreshTasks(siteId, uid);
+                refreshTasks(siteId, uid, role);
             };
             box.appendChild(div);
         });
     }
 
-    async function refreshMyTasksPanel(siteId, uid){
+    // ★★★ 修改：新增 role 參數，用於過濾 assign_all ★★★
+    async function refreshMyTasksPanel(siteId, uid, role){
         const box=$("mytasks_box"); box.innerHTML="";
         const {data:rows} = await supabase.from("tasks").select("*").eq("site_id", siteId).order("created_at",{ascending:false}).limit(20);
         if(!rows || !rows.length) return setText($("mytasks_msg"),"無");
         const {data:ass} = await supabase.from("task_assignees").select("task_id").eq("user_id", uid);
         const myTIds = new Set((ass||[]).map(x=>x.task_id));
-        const mine = rows.filter(r => r.created_by===uid || r.assign_all || myTIds.has(r.id)).slice(0,5);
+        
+        // ★★★ 過濾邏輯：如果是工程師，assign_all 的任務不顯示 ★★★
+        const mine = rows.filter(r => 
+            r.created_by === uid || 
+            (r.assign_all && role !== 'engineer') || 
+            myTIds.has(r.id)
+        ).slice(0,5);
+
         if(!mine.length) return setText($("mytasks_msg"),"無近期任務");
         setText($("mytasks_msg"),"");
         mine.forEach(r => {
@@ -1091,9 +1124,9 @@ async function refreshInventoryBadge(siteId, uid, role) {
             await refreshInventoryBadge(siteId, uid, role);
             refreshTodaySchedule(siteId);
             refreshMyScheduleLine(siteId, uid);
-            loadAssignees(siteId);
-            refreshTasks(siteId, uid);
-            refreshMyTasksPanel(siteId, uid);
+            loadAssignees(siteId); // ★ 這裡現在會過濾工程師
+            refreshTasks(siteId, uid, role); // ★ 傳入 role 以便過濾全體任務
+            refreshMyTasksPanel(siteId, uid, role); // ★ 傳入 role
             refreshSiteEvents(siteId, isManagerRole(role));
             
             const frame = $("main_frame");
@@ -1143,10 +1176,16 @@ async function refreshInventoryBadge(siteId, uid, role) {
             const all=$("task_assign_all").checked, selAss=$("task_assignees");
             const uids=Array.from(selAss.selectedOptions).map(o=>o.value);
             if(!t) return alert("請輸入標題");
+            
+            // 任務建立
             const {data, error} = await supabase.from("tasks").insert({site_id:sel.value, title:t, body:b, status:st, created_by:uid, assign_all:all}).select().single();
             if(error) return alert(error.message);
             if(!all && uids.length) await supabase.from("task_assignees").insert(uids.map(u=>({task_id:data.id, user_id:u})));
-            $("task_title").value=""; $("task_body").value=""; refreshTasks(sel.value, uid); refreshMyTasksPanel(sel.value, uid);
+            
+            $("task_title").value=""; $("task_body").value=""; 
+            const role=mems.find(m=>m.site_id===sel.value)?.role||"";
+            refreshTasks(sel.value, uid, role); 
+            refreshMyTasksPanel(sel.value, uid, role);
         };
     }
     main();
