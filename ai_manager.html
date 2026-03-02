@@ -106,83 +106,92 @@ const MODEL_LIST = [
     };
 
     // ★★★ 2. 診斷版：獲取數據 (會顯示在畫面上) ★★★
-    async function fetchSystemContext(type) {
-        // 檢查網址參數
-        const siteId = new URLSearchParams(window.location.search).get("site_id");
-        if (!siteId) {
-            appendMessage("❌ 錯誤：網址中找不到 site_id。請務必從主控台(app.html)進入此頁面。", "system");
-            return "【系統警告】無法識別場域 ID (site_id missing)";
-        }
+async function fetchSystemContext() {
+    const siteId = new URLSearchParams(window.location.search).get("site_id");
+    if (!siteId) return "【錯誤】未偵測到場域 ID";
 
-        let context = "";
-        
-        // 嘗試抓取庫存
-        if (type === 'inventory' || type === 'all') {
-            appendMessage("🔍 正在讀取庫存資料庫...", "system");
-            const { data: inv, error } = await supabase.from("inventory_items").select("name, last_check_quantity, last_check_status").eq("site_id", siteId);
-            
-            if (error) {
-                appendMessage(`❌ 庫存讀取失敗：${error.message}`, "system");
-            } else if (!inv || inv.length === 0) {
-                appendMessage("⚠️ 庫存資料表是空的 (或是權限不足看不見)", "system");
-                context += "【庫存數據】無資料 (資料庫回傳空值)\n";
-            } else {
-                appendMessage(`✅ 成功抓到 ${inv.length} 筆庫存資料！(AI 已讀取)`, "system");
-                context += `【庫存數據】\n${JSON.stringify(inv)}\n`;
-            }
-        }
-        
-        // 嘗試抓取班表
-        if (type === 'schedule' || type === 'all') {
-            const today = new Date().toISOString().split('T')[0];
-            const { data: sch, error } = await supabase.from("site_schedules").select("person_name, shift").eq("site_id", siteId).eq("work_date", today);
-            
-            if (sch && sch.length > 0) {
-                appendMessage(`✅ 成功抓到 ${sch.length} 筆今日班表！`, "system");
-                context += `【今日班表 ${today}】\n${JSON.stringify(sch)}\n`;
-            }
-        }
+    // 同時啟動多個查詢，獲取完整資料
+    const [inv, sch, tasks, events] = await Promise.all([
+        supabase.from("inventory_items").select("*").eq("site_id", siteId),
+        supabase.from("site_schedules").select("*").eq("site_id", siteId),
+        supabase.from("tasks").select("*").eq("site_id", siteId),
+        supabase.from("site_events").select("*").eq("site_id", siteId)
+    ]);
 
-        return context;
+    let context = "--- 以下為目前帳號場域內的完整即時資料 ---\n";
+    context += `【庫存總覽】：${JSON.stringify(inv.data || [])}\n`;
+    context += `【班表紀錄】：${JSON.stringify(sch.data || [])}\n`;
+    context += `【工作任務】：${JSON.stringify(tasks.data || [])}\n`;
+    context += `【重要活動】：${JSON.stringify(events.data || [])}\n`;
+    
+    return context;
+}
+    // 3. 發送訊息
+    // 修改後的 sendMessage，加入日期識別邏輯
+window.sendMessage = async () => {
+    const input = $("user_input");
+    const msg = input.value.trim();
+    if (!msg || !apiKey) return;
+
+    appendMessage(msg, "user");
+    input.value = "";
+    
+    // 簡單的日期識別：判斷使用者是否問明天或後天
+    let targetDate = new Date().toISOString().split('T')[0];
+    if (msg.includes("明天")) {
+        const d = new Date(); d.setDate(d.getDate() + 1);
+        targetDate = d.toISOString().split('T')[0];
+    } else if (msg.includes("3月3號")) {
+        targetDate = "2026-03-03"; 
     }
 
-    // 3. 發送訊息
-    window.sendMessage = async () => {
-        const input = $("user_input");
-        const msg = input.value.trim();
-        if (!msg) return;
-        if (!apiKey) return alert("請先設定 API Key");
-
-        appendMessage(msg, "user");
-        input.value = "";
-        const btn = $("btn_send");
-        btn.disabled = true;
-        btn.textContent = "診斷中...";
-
-        try {
-            // ★★★ 關鍵修改：更聰明的關鍵字判斷 ★★★
-            let dataType = 'all'; 
-            // 只要稍微沾上邊，就全部抓下來給 AI，避免漏抓
-            if (msg.includes("庫存") || msg.includes("剩") || msg.includes("有") || msg.includes("沒有") || msg.includes("缺")) dataType = 'inventory';
-            if (msg.includes("班") || msg.includes("誰") || msg.includes("人")) dataType = 'schedule';
-            
-            // 如果什麼關鍵字都沒打，預設抓全部 (為了除錯方便)
-            if (dataType === 'all') appendMessage("ℹ️ 未偵測到特定關鍵字，將嘗試讀取所有資料...", "system");
-
-            const contextData = await fetchSystemContext(dataType);
-            
+    try {
+            // 不再判斷 dataType，直接抓取所有資料
+            const contextData = await fetchSystemContext(); 
             const response = await callGeminiSmart(msg, contextData);
             appendMessage(response, "ai");
-
         } catch (error) {
-            console.error(error);
-            appendMessage("⚠️ 系統錯誤：" + error.message, "system");
-        } finally {
-            btn.disabled = false;
-            btn.textContent = "發送";
-            $("chat_history").scrollTop = $("chat_history").scrollHeight;
-        }
-    };
+        appendMessage("⚠️ " + error.message, "system");
+    }
+};
+
+// 升級版的資料抓取：支援指定日期
+async function fetchAdvancedContext(date, msg) {
+    const siteId = new URLSearchParams(window.location.search).get("site_id");
+    let context = `【目前查詢日期】：${date}\n`;
+    
+    // 抓取該日班表
+    const { data: sch } = await supabase.from("site_schedules")
+        .select("person_name, shift")
+        .eq("site_id", siteId)
+        .eq("work_date", date);
+        
+    if (sch && sch.length > 0) {
+        appendMessage(`✅ 成功抓到 ${date} 的班表資料`, "system");
+        context += `【班表數據】\n${JSON.stringify(sch)}\n`;
+    } else {
+        context += `【班表數據】該日期目前無排班紀錄\n`;
+    }
+    return context;
+}
+
+// 處理請假動作 (AI 權限核心)
+async function handleLeaveAction(aiMsg) {
+    // 這裡可以解析 AI 訊息中的姓名與日期
+    // 為了安全，我們會先跳出彈窗詢問使用者
+    if (confirm("AI 想要幫您將今日班表修改為「事假」，確定要執行嗎？")) {
+        const siteId = new URLSearchParams(window.location.search).get("site_id");
+        // 執行更新
+        const { error } = await supabase.from("site_schedules")
+            .update({ shift: "事假" })
+            .eq("site_id", siteId)
+            .eq("work_date", new Date().toISOString().split('T')[0])
+            .eq("person_name", "您的名字"); // 這裡需搭配登入資訊
+            
+        if (!error) appendMessage("✅ 已成功為您登記今日事假。", "ai");
+        else appendMessage("❌ 請假失敗：" + error.message, "system");
+    }
+}
 
     // 4. 智慧呼叫 (Smart Loop)
     async function callGeminiSmart(userMsg, context) {
