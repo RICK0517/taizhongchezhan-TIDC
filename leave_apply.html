@@ -83,9 +83,20 @@
   const currentSiteId = params.get("site_id");
 
   function setMsg(t, ok=false){ const el=$("msg"); el.textContent=t; el.className=ok?"msg ok":"msg"; }
+  
   function toLocalISO(dt) {
       const tz = dt.getTimezoneOffset() * 60000;
       return new Date(dt.getTime() - tz).toISOString().slice(0, 16);
+  }
+
+  // ★★★ 新增：計算下一個小時的 00 分 ★★★
+  function getNextHourISO() {
+      const d = new Date();
+      d.setHours(d.getHours() + 1); // 加一小時
+      d.setMinutes(0); // 設為 00 分
+      d.setSeconds(0);
+      d.setMilliseconds(0);
+      return toLocalISO(d);
   }
 
   async function renderMy(uid){
@@ -97,7 +108,6 @@
     $("my_box").innerHTML = (rows||[]).map(r => {
       const t1 = r.date_from ? r.date_from.replace("T", " ") : "";
       const t2 = r.date_to ? r.date_to.replace("T", " ") : "";
-      // 若主管尚未填寫，total_duration 可能為空
       return `
       <div class="task">
         <div style="display:flex;justify-content:space-between">
@@ -115,8 +125,11 @@
     if(!session || !currentSiteId) { document.body.innerHTML="請先登入並選擇場域"; return; }
     const uid = session.user.id;
     
-    $("date_from").value = toLocalISO(new Date());
-    $("date_to").value = toLocalISO(new Date());
+    // ★★★ 修改：使用下一個小時 00 分作為預設值 ★★★
+    const defaultTime = getNextHourISO();
+    $("date_from").value = defaultTime;
+    $("date_to").value = defaultTime;
+    
     renderMy(uid);
 
     $("btn_submit").onclick = async () => {

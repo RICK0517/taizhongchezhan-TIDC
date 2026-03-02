@@ -27,7 +27,8 @@
     .pill.rejected{background:#fef2f2;color:#b91c1c}
     
     /* 唯讀資訊列 */
-    .detail-row { font-size:14px; color:var(--text-color); opacity:0.8; margin-top:6px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .detail-row { font-size:14px; color:var(--text-color); opacity:0.9; margin-top:8px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .reason-box { background:rgba(0,0,0,0.03); padding:8px 12px; margin-top:10px; border-radius:6px; font-size:14px; border-left: 4px solid #aaa; line-height: 1.5; }
     
     /* 主管填寫區樣式 */
     .mgr-input-group {
@@ -37,8 +38,11 @@
     .mgr-input-group label { font-size: 12px; font-weight: bold; color: var(--primary-color, #0277bd); display:block; margin-bottom:4px;}
     .mgr-input-group input { width: 100%; box-sizing: border-box; border: 1px solid var(--input-border, #90caf9); padding:8px; background:var(--input-bg, #fff); color:var(--text-color) }
     
-    /* 強調第8點：時數合計 */
     .highlight-input { border: 2px solid #29b6f6 !important; }
+    
+    /* 圖片按鈕樣式 */
+    .img-link { display:inline-flex; align-items:center; gap:4px; margin-top:8px; color:#0277bd; text-decoration:none; font-size:13px; border:1px solid #b3e5fc; padding:4px 8px; border-radius:4px; background:#e1f5fe; transition:all 0.2s; }
+    .img-link:hover { background:#b3e5fc; }
   </style>
 </head>
 <body>
@@ -70,14 +74,12 @@
   window.approve = async (id) => {
     if (!confirm("確定通過並儲存資料?")) return;
     
-    // 取得主管填寫的欄位 (對應 3, 4, 5, 8, 9)
     const agentName = $(`agent_name_${id}`).value;
     const agentUnit = $(`agent_unit_${id}`).value;
     const task = $(`task_${id}`).value;
-    const duration = $(`duration_${id}`).value; // 第8點
-    const mgrNote = $(`mgr_note_${id}`).value;   // 第9點：備註欄
+    const duration = $(`duration_${id}`).value;
+    const mgrNote = $(`mgr_note_${id}`).value;
 
-    // 必填檢查
     if(!agentName){ alert("請填寫【代理人】"); return; }
     if(!duration){ alert("請填寫【請假時程合計】(例如: 1日4小時)"); return; }
 
@@ -101,6 +103,12 @@
       if (error) alert("操作失敗"); else loadData();
   };
 
+  function formatTime(isoStr) {
+      if (!isoStr) return "??";
+      if (isoStr.length === 10) return isoStr;
+      return isoStr.replace("T", " ").slice(0, 16);
+  }
+
   let currentData = [];
   let currentSiteName = "";
 
@@ -110,11 +118,9 @@
     const status = $("status_sel").value;
     $("box").innerHTML = "讀取中...";
 
-    // 取得場域名稱 (對應第2點)
     const {data:s} = await sb.from("sites").select("name").eq("id", currentSiteId).single();
     if(s) currentSiteName = s.name;
     
-    // 取得人員對照表 (對應第1點：申請人姓名)
     const { data: people } = await sb.rpc("get_site_people", { p_site_id: currentSiteId });
     const nameMap = {};
     if(people) people.forEach(p => nameMap[p.user_id] = p.display_name || p.username);
@@ -131,8 +137,19 @@
 
     $("box").innerHTML = "";
     currentData.forEach(r => {
-      const dateStr = r.date_from.replace("T"," ") + " ~ " + r.date_to.replace("T"," ");
+      const t1 = formatTime(r.date_from);
+      const t2 = formatTime(r.date_to);
+      const dateStr = `${t1} ~ ${t2}`;
       const isPending = r.status === "pending";
+      
+      // ★★★ 產生圖片連結 ★★★
+      let imgHtml = "";
+      if (r.photo_path) {
+          const { data } = sb.storage.from("leave-photos").getPublicUrl(r.photo_path);
+          if (data && data.publicUrl) {
+              imgHtml = `<br><a href="${data.publicUrl}" target="_blank" class="img-link">🖼️ 查看證明圖片</a>`;
+          }
+      }
       
       const div = document.createElement("div");
       div.className = "task";
@@ -145,9 +162,14 @@
         </div>
 
         <div class="detail-row">
-            <span>📅 時間區間：${dateStr}</span>
+            <span>📅 請假時間：<strong>${dateStr}</strong></span>
         </div>
-        ${r.note ? `<div style="background:#f5f5f5;padding:8px;margin-top:8px;border-radius:6px;font-size:13px">📄 事由：${r.note}</div>` : ""}
+        
+        <div class="reason-box">
+            <span style="font-weight:bold;color:#555">📄 事由：</span>
+            <span>${r.note || "<span style='color:#999'>(未填寫)</span>"}</span>
+            ${imgHtml}
+        </div>
         
         ${isPending ? `
             <div class="mgr-input-group">
@@ -200,7 +222,7 @@
     });
   }
 
-  // === 匯出 Excel (嚴格對應 9 個欄位) ===
+  // === 匯出 Excel ===
   $("btn_export").onclick = () => {
     if(!currentData.length) { alert("目前無資料可匯出"); return; }
     
@@ -212,7 +234,7 @@
         "5委託代理事項": row.delegation_task || "",
         "6請假類型": row.leave_type,
         "7請假事由": row.note || "",
-        "8請假時程": `${row.date_from.replace("T"," ")} ~ ${row.date_to.replace("T"," ")} (共計 ${row.total_duration||""})`,
+        "8請假時程": `${formatTime(row.date_from)} ~ ${formatTime(row.date_to)} (共計 ${row.total_duration||""})`,
         "9備註欄": row.manager_note || ""
     }));
 

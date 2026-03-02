@@ -230,14 +230,14 @@
           <div id="my_shift_text" class="shift-text"></div>
         </div>
 
-        <div class="nav-category active" onclick="toggleNav(this)">
+        <div class="nav-category" onclick="toggleNav(this)">
             <button class="nav-header">一般功能<span class="nav-arrow">▼</span></button>
             <div class="nav-items" onclick="event.stopPropagation()">
                 <button class="nav-btn current" id="btn_home" onclick="showDashboard()">🏠 主控台</button>
             </div>
         </div>
         
-        <div class="nav-category active" onclick="toggleNav(this)">
+        <div class="nav-category" onclick="toggleNav(this)">
           <button class="nav-header">小工具<span class="nav-arrow">▼</span></button>
           <div class="nav-items" onclick="event.stopPropagation()">
             <button class="nav-btn" onclick="showTool('calc', this)">🧮 計算機</button>
@@ -245,7 +245,7 @@
           </div>
         </div>
 
-        <div class="nav-category active" onclick="toggleNav(this)">
+        <div class="nav-category" onclick="toggleNav(this)">
           <button class="nav-header">個人資料<span class="nav-arrow">▼</span></button>
           <div class="nav-items" onclick="event.stopPropagation()">
             <button class="nav-btn" onclick="loadPage('./schedule_view.html')">📅 查看班表</button>
@@ -259,6 +259,22 @@
           <div class="nav-items" onclick="event.stopPropagation()">
             <button class="nav-btn" onclick="loadPage('./leave_apply.html')">📝 申請休假</button>
             <button class="nav-btn" onclick="loadPage('./stats.html')">📊 假別統計</button>
+          </div>
+        </div>
+        
+        <div class="nav-category" onclick="toggleNav(this)">
+          <button class="nav-header">
+            後勤管理
+            <div style="display:flex; align-items:center;">
+              <span id="logistics_badge" class="group-badge-dot" style="display:none;"></span>
+              <span class="nav-arrow">▼</span>
+            </div>
+          </button>
+          <div class="nav-items" onclick="event.stopPropagation()">
+            <button id="btn_inventory" class="nav-btn" onclick="loadPage('./inventory_check.html')">
+              📦 庫存檢查
+              <span id="inventory_badge" class="badge-dot" style="display:none;"></span>
+            </button>
           </div>
         </div>
 
@@ -883,6 +899,45 @@ const themes = {
             btnGroup.style.display = "none";
         }
     }
+async function refreshInventoryBadge(siteId, uid, role) {
+        const badge = document.getElementById("inventory_badge");
+        const parentBadge = document.getElementById("logistics_badge"); // ★ 新增取得父層紅點
+        
+        if(!badge) return;
+        let showRedDot = false;
+
+        if (role === 'engineer' || role === 'supervisor') {
+            // 主管：檢查有無「不足」
+            const { count } = await supabase.from("inventory_items")
+                .select("id", { count: 'exact', head: true })
+                .eq("site_id", siteId)
+                .eq("last_check_status", "不足請購買");
+            if (count > 0) showRedDot = true;
+        } else {
+            // 員工：檢查有無「指派給我」且「過期」
+            const { data: items } = await supabase.from("inventory_items")
+                .select("last_check_date, check_freq_days")
+                .eq("site_id", siteId)
+                .contains('assigned_user_ids', JSON.stringify([uid]));
+            
+            if (items && items.length > 0) {
+                const today = new Date(); today.setHours(0,0,0,0);
+                const hasOverdue = items.some(item => {
+                    if (!item.last_check_date) return true; 
+                    const next = new Date(item.last_check_date);
+                    next.setDate(next.getDate() + item.check_freq_days);
+                    next.setHours(0,0,0,0);
+                    return today >= next;
+                });
+                if (hasOverdue) showRedDot = true;
+            }
+        }
+        
+        // ★ 同時控制兩個紅點
+        const displayStyle = showRedDot ? "inline-block" : "none";
+        badge.style.display = displayStyle;
+        if(parentBadge) parentBadge.style.display = displayStyle;
+    }
 
     async function refreshTodaySchedule(siteId){
         const box=$("today_box"); box.innerHTML=""; $("today_msg").textContent="讀取中...";
@@ -1033,6 +1088,7 @@ const themes = {
 
             // 執行資料載入
             await refreshLeaveBadge(siteId, role);
+            await refreshInventoryBadge(siteId, uid, role);
             refreshTodaySchedule(siteId);
             refreshMyScheduleLine(siteId, uid);
             loadAssignees(siteId);
@@ -1062,6 +1118,7 @@ const themes = {
         setInterval(async()=>{
             const siteId=sel.value; const role=mems.find(m=>m.site_id===siteId)?.role||"";
             if(siteId) refreshLeaveBadge(siteId, role);
+            refreshInventoryBadge(siteId, uid, role);
         }, 30000);
 
         $("cal_prev").onclick=()=>{calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();};

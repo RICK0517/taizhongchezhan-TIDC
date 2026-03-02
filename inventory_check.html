@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>庫存檢查</title>
+  <script src="theme.js"></script>
+  <style>
+    body{font-family:system-ui,Arial;margin:0;padding:20px;background:var(--bg-color);color:var(--text-color)}
+    .card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 2px 5px rgba(0,0,0,0.03)}
+    
+    /* 共用輸入框樣式 */
+    input,select,button{padding:8px;border:1px solid var(--input-border);border-radius:6px;background:var(--input-bg);color:var(--text-color);box-sizing:border-box;font-size:14px;}
+    
+    /* 修正：確保 Placeholder 在深色模式也能看見 */
+    ::placeholder { color: var(--text-color); opacity: 0.5; }
+    
+    button{background:var(--primary-color);color:#fff;font-weight:bold;cursor:pointer;border:none;}
+    button:hover{opacity:0.9}
+    button.secondary{background:#64748b}
+    
+    .item-row{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--border-color);padding:16px 0;flex-wrap:wrap;gap:15px;}
+    .item-info{flex:1;min-width:240px;}
+    
+    /* 右側操作區 */
+    .item-actions{text-align:right; min-width:280px; display:flex; flex-direction:column; align-items:flex-end; gap:8px;}
+    .input-group { display:flex; gap:6px; align-items:center; background:rgba(0,0,0,0.03); padding:6px; border-radius:8px; }
+
+    /* 狀態標籤 */
+    .badge{padding:4px 8px;border-radius:4px;font-size:12px;font-weight:bold;display:inline-block;margin-bottom:4px;}
+    .bg-ok{background:#e8f5e9;color:#2e7d32;} /* 充足 */
+    .bg-warn{background:#fff3e0;color:#ef6c00;} /* 還夠 */
+    .bg-err{background:#ffebee;color:#c62828;border:1px solid #ef9a9a;} /* 不足 */
+    .bg-gray{background:#eee;color:#666;}
+
+    .alert-border { border-left: 4px solid #d32f2f; padding-left:12px; background: rgba(255,0,0,0.02); }
+    
+    /* ★★★ 修正字體顏色：改用變數 + 透明度，支援深淺色切換 ★★★ */
+    .text-small { font-size:13px; color:var(--text-color); opacity:0.8; margin-top:4px; line-height:1.4; }
+    .text-tiny { font-size:12px; color:var(--text-color); opacity:0.6; margin-top:2px; }
+    .hint-text { font-size:12px; color:var(--text-color); opacity:0.7; margin-bottom:10px; }
+
+    /* Modal */
+    dialog{border:none;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.3);width:90%;max-width:500px;background:var(--card-bg);color:var(--text-color);}
+    dialog::backdrop{background:rgba(0,0,0,0.5);}
+    
+    .hidden{display:none;}
+    
+    /* 修正排版問題：強制 Modal 內的 Label 和 Input 換行且滿寬 */
+    #item_form label { display: block; margin-top: 12px; font-weight: bold; font-size: 14px; margin-bottom: 4px; color: var(--text-color); }
+    #item_form input, #item_form select { width: 100%; display: block; }
+  </style>
+</head>
+<body>
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+    <h1 style="margin:0">📦 庫存檢查回報</h1>
+    <button id="btn_add" class="hidden" style="width:auto;padding:8px 16px;">+ 新增項目</button>
+</div>
+
+<div id="loading">載入中...</div>
+
+<section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;">
+        <h3 style="margin:0;border-left:4px solid var(--primary-color);padding-left:8px;">庫存清單</h3>
+        <button onclick="loadItems()" class="secondary" style="width:auto;padding:4px 10px;font-size:12px;margin:0;">🔄 重新整理</button>
+    </div>
+    <div class="hint-text">
+        💡 請輸入「數量」並選擇「狀態」後按下回報。
+    </div>
+    <div id="list_box"></div>
+</section>
+
+<dialog id="edit_modal">
+    <h3 id="modal_title" style="margin-top:0">新增項目</h3>
+    <form id="item_form">
+        <input type="hidden" id="edit_id">
+        
+        <label>物品名稱</label>
+        <input id="inp_name" required placeholder="例如：A4紙">
+        
+        <label>放置位置</label>
+        <input id="inp_loc" placeholder="例如：印表機旁櫃子">
+        
+        <label>檢查頻率 (天)</label>
+        <input type="number" id="inp_freq" value="7" min="1">
+        
+        <label>指派負責人 (按住 Ctrl 可複選)</label>
+        <select id="inp_users" multiple style="height:120px;"></select>
+        
+        <div style="display:flex;gap:10px;margin-top:20px;">
+            <button type="button" class="secondary" style="width:100%" onclick="document.getElementById('edit_modal').close()">取消</button>
+            <button type="submit" style="width:100%">儲存</button>
+        </div>
+        <button type="button" id="btn_del" style="background:#ef5350;width:100%;margin-top:10px;" class="hidden">刪除此項目</button>
+    </form>
+</dialog>
+
+<script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    const supabase = createClient("https://whbllncddoqbwukstxel.supabase.co", "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2");
+    
+    const params = new URLSearchParams(window.location.search);
+    const siteId = params.get("site_id");
+    const $ = id => document.getElementById(id);
+
+    let myUid = "";
+    let myRole = "";
+    let allUsers = []; 
+    let userMap = {}; // ID 對應 名字
+
+    async function init(){
+        const {data:{session}} = await supabase.auth.getSession();
+        if(!session) return location.href="index.html";
+        myUid = session.user.id;
+        
+        const {data:mem} = await supabase.from("site_memberships").select("role").eq("user_id", myUid).eq("site_id", siteId).maybeSingle();
+        myRole = mem ? mem.role : "employee";
+
+        const {data:users} = await supabase.rpc("get_site_people", { p_site_id: siteId });
+        allUsers = users || [];
+        allUsers.forEach(u => { userMap[u.user_id] = u.display_name || u.username; });
+
+        renderUserSelect();
+        if(isManager()){
+             $("btn_add").classList.remove("hidden");
+             $("btn_add").onclick = () => openModal();
+        }
+
+        loadItems();
+    }
+
+    window.loadItems = async () => {
+        $("loading").style.display = "block";
+        const {data:items, error} = await supabase.from("inventory_items")
+            .select("*")
+            .eq("site_id", siteId)
+            .order("name");
+        
+        $("loading").style.display = "none";
+        if(error) return alert("讀取失敗");
+        renderList(items);
+    }
+
+    function isManager() { return myRole === 'engineer' || myRole === 'supervisor'; }
+
+    function getNextCheckDate(lastDateStr, freq){
+        if(!lastDateStr) return new Date(0);
+        const d = new Date(lastDateStr);
+        d.setDate(d.getDate() + freq);
+        return d;
+    }
+
+    function renderList(items){
+        const box = $("list_box"); box.innerHTML = "";
+        
+        if(items.length === 0) {
+            box.innerHTML = `<div style="text-align:center;opacity:0.6;padding:20px;">目前無庫存項目</div>`;
+            return;
+        }
+
+        items.forEach(item => {
+            const isInsufficient = item.last_check_status === '不足請購買';
+            const nextDate = getNextCheckDate(item.last_check_date, item.check_freq_days);
+            const today = new Date(); today.setHours(0,0,0,0); nextDate.setHours(0,0,0,0);
+            const isOverdue = today >= nextDate;
+
+            let rowClass = "";
+            let statusBadge = "";
+            
+            if(isInsufficient) {
+                rowClass = "alert-border";
+                statusBadge = `<span class="badge bg-err">⚠️ 不足 (${item.last_check_quantity||"未填"})</span>`;
+            } else if(isOverdue && !item.last_check_date) {
+                statusBadge = `<span class="badge bg-gray">尚未檢查</span>`;
+            } else if(isOverdue) {
+                rowClass = "alert-border";
+                statusBadge = `<span class="badge" style="background:#fff3e0;color:#e65100">⏳ 應檢查</span>`;
+            } else {
+                statusBadge = `<span class="badge bg-ok">${item.last_check_status} (${item.last_check_quantity||"OK"})</span>`;
+            }
+
+            const lastCheckerName = userMap[item.last_check_by] || "未知";
+            const lastCheckInfo = item.last_check_date 
+                ? `${item.last_check_date} ｜ ${lastCheckerName} ｜ 數量：${item.last_check_quantity || "-"}` 
+                : "無紀錄";
+            
+            const assignedNames = allUsers.filter(u => (item.assigned_user_ids||[]).includes(u.user_id))
+                                          .map(u => u.display_name || u.username).join(", ");
+            const isAssigned = (item.assigned_user_ids||[]).includes(myUid);
+            const assignedTag = isAssigned ? `<span style="font-size:11px;background:#e3f2fd;color:#1565c0;padding:2px 6px;border-radius:4px;margin-left:6px;">負責</span>` : "";
+
+            const div = document.createElement("div");
+            div.className = `item-row ${rowClass}`;
+            div.innerHTML = `
+                <div class="item-info">
+                    <div style="font-weight:bold;font-size:16px;display:flex;align-items:center;">
+                        ${item.name} ${assignedTag}
+                    </div>
+                    <div class="text-small">
+                        📍 ${item.location || "未指定"} ｜ 👤 ${assignedNames || "無"}
+                    </div>
+                    <div class="text-tiny" style="color:${isOverdue?'#ef5350':''}">
+                        📝 上次：${lastCheckInfo}
+                    </div>
+                </div>
+
+                <div class="item-actions">
+                    ${statusBadge}
+                    <div class="input-group">
+                        <select id="status_${item.id}" style="padding:6px;width:90px;font-size:13px;">
+                            <option value="充足" ${item.last_check_status==='充足'?'selected':''}>✅ 充足</option>
+                            <option value="還夠" ${item.last_check_status==='還夠'?'selected':''}>⚠️ 還夠</option>
+                            <option value="不足請購買" ${item.last_check_status==='不足請購買'?'selected':''}>❌ 不足</option>
+                        </select>
+                        <input type="text" id="qty_${item.id}" placeholder="數量 (例: 3包)" style="padding:6px;width:100px;font-size:13px;" value="${item.last_check_quantity||''}">
+                        <button onclick="report('${item.id}')" style="padding:6px 12px;font-size:13px;">回報</button>
+                    </div>
+                    ${isManager() ? `
+                        <button class="secondary" style="font-size:11px;padding:2px 6px;width:auto;background:transparent;color:var(--text-color);opacity:0.7;border:1px solid var(--border-color);margin-top:4px;" onclick='window.editItem(${JSON.stringify(item).replace(/'/g, "&#39;")})'>⚙️ 設定</button>
+                    ` : ""}
+                </div>
+            `;
+            box.appendChild(div);
+        });
+    }
+
+    // 回報功能
+    window.report = async (id) => {
+        const statusEl = $(`status_${id}`);
+        const qtyEl = $(`qty_${id}`);
+        
+        const status = statusEl.value;
+        const qty = qtyEl.value.trim();
+
+        if(!qty) { alert("請填寫數量 (例如: 2包, 5個)"); qtyEl.focus(); return; }
+
+        const btn = qtyEl.nextElementSibling;
+        const originalText = btn.textContent;
+        btn.textContent = "..."; btn.disabled = true;
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        
+        const {error} = await supabase.from("inventory_items").update({
+            last_check_status: status,
+            last_check_quantity: qty,
+            last_check_date: todayStr,
+            last_check_by: myUid
+        }).eq("id", id);
+
+        if(error) {
+            alert("回報失敗: " + error.message);
+            btn.textContent = originalText; btn.disabled = false;
+        } else {
+            loadItems();
+        }
+    };
+
+    window.openModal = () => {
+        $("item_form").reset();
+        $("edit_id").value = "";
+        $("btn_del").classList.add("hidden");
+        $("modal_title").textContent = "新增庫存項目";
+        $("edit_modal").showModal();
+    };
+
+    window.editItem = (item) => {
+        $("edit_id").value = item.id;
+        $("inp_name").value = item.name;
+        $("inp_loc").value = item.location;
+        $("inp_freq").value = item.check_freq_days;
+        
+        const select = $("inp_users");
+        Array.from(select.options).forEach(opt => {
+            opt.selected = (item.assigned_user_ids || []).includes(opt.value);
+        });
+
+        $("btn_del").classList.remove("hidden");
+        $("btn_del").onclick = () => deleteItem(item.id);
+        $("modal_title").textContent = "編輯項目";
+        $("edit_modal").showModal();
+    };
+
+    $("item_form").onsubmit = async (e) => {
+        e.preventDefault();
+        const id = $("edit_id").value;
+        const payload = {
+            site_id: siteId,
+            name: $("inp_name").value,
+            location: $("inp_loc").value,
+            check_freq_days: parseInt($("inp_freq").value),
+            assigned_user_ids: Array.from($("inp_users").selectedOptions).map(o => o.value)
+        };
+
+        let error;
+        if(id) ({error} = await supabase.from("inventory_items").update(payload).eq("id", id));
+        else ({error} = await supabase.from("inventory_items").insert(payload));
+
+        if(error) alert("儲存失敗: " + error.message);
+        else { $("edit_modal").close(); loadItems(); }
+    };
+
+    async function deleteItem(id){
+        if(!confirm("確定刪除此項目？")) return;
+        const {error} = await supabase.from("inventory_items").delete().eq("id", id);
+        if(error) alert("刪除失敗");
+        else { $("edit_modal").close(); loadItems(); }
+    }
+
+    function renderUserSelect(){
+        const sel = $("inp_users");
+        sel.innerHTML = "";
+        allUsers.forEach(u => {
+            const opt = document.createElement("option");
+            opt.value = u.user_id;
+            opt.textContent = u.display_name || u.username;
+            sel.appendChild(opt);
+        });
+    }
+
+    init();
+</script>
+</body>
+</html>

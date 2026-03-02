@@ -83,6 +83,22 @@
     <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
 
     <div>
+      <div class="section-label">4. 帳號安全</div>
+      <div class="hint" style="margin-bottom:15px;">在此修改您的登入密碼。若忘記密碼，請聯繫場域工程師協助重設。</div>
+      
+      <div style="background:#fff3e0; padding:15px; border-radius:8px; border:1px solid #ffe0b2;">
+        <label>新密碼</label>
+        <input type="password" id="new_password" placeholder="請輸入新密碼 (至少 6 碼)">
+        
+        <label style="margin-top:10px;">確認新密碼</label>
+        <input type="password" id="confirm_password" placeholder="請再次輸入新密碼">
+        
+        <button class="btn-save" style="background:#ff9800; margin-top:15px;" onclick="changeMyPassword()">🔒 修改密碼</button>
+        <div id="pw_msg" class="err-msg" style="text-align:center;"></div>
+      </div>
+    </div>
+
+    <div>
       <div class="section-label">3. 個人化登入/登出動畫</div>
       <div class="hint" style="margin-bottom:15px;">此影片僅供您個人使用。若未設定，則不會播放動畫。</div>
       
@@ -127,6 +143,74 @@
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const $ = id => document.getElementById(id);
 
+    // ★★★ 關鍵修正：加入 Session 檢查的修改密碼函式 ★★★
+    window.changeMyPassword = async () => {
+        const p1 = $("new_password").value;
+        const p2 = $("confirm_password").value;
+        const msg = $("pw_msg");
+        const btn = event.target; // 抓取按鈕
+        
+        msg.textContent = "";
+        
+        // 1. 基礎檢查
+        if(!p1 || p1.length < 6) {
+            msg.textContent = "❌ 密碼長度至少需 6 碼";
+            msg.style.color = "#d32f2f";
+            return;
+        }
+        if(p1 !== p2) {
+            msg.textContent = "❌ 兩次輸入的密碼不符";
+            msg.style.color = "#d32f2f";
+            return;
+        }
+
+        // 2. 鎖定按鈕
+        const orgText = btn.textContent;
+        btn.textContent = "驗證身分中...";
+        btn.disabled = true;
+
+        try {
+            // ★ 強制檢查 Session 是否存在
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            
+            if (sessionError || !session) {
+                // 若 session 遺失，嘗試重新整理 session
+                const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+                if (refreshError || !refreshData.session) {
+                    throw new Error("您的登入時效已過，請重新登入後再試。");
+                }
+            }
+
+            // 3. session 存在，執行修改
+            btn.textContent = "修改中...";
+            const { data, error } = await supabase.auth.updateUser({
+                password: p1
+            });
+
+            if(error) throw error;
+
+            // 4. 成功
+            msg.textContent = "✅ 密碼修改成功！下次請用新密碼登入。";
+            msg.style.color = "#2e7d32";
+            $("new_password").value = "";
+            $("confirm_password").value = "";
+
+        } catch (err) {
+            console.error(err);
+            // 針對 Auth session missing 做白話提示
+            if (err.message && err.message.includes("Auth session missing")) {
+                msg.textContent = "❌ 系統偵測不到您的登入狀態，請重新整理網頁或重新登入。";
+            } else {
+                msg.textContent = "❌ 修改失敗：" + (err.message || "未知錯誤");
+            }
+            msg.style.color = "#d32f2f";
+        } finally {
+            // 解鎖按鈕
+            btn.textContent = orgText;
+            btn.disabled = false;
+        }
+    };
+
     // 設定與偏好
     const BUCKET_NAME = "system_assets";
     let currentUid = null;
@@ -134,37 +218,43 @@
 
     async function init(){
         const { data: { session } } = await supabase.auth.getSession();
-        if(!session) { location.href="./index.html"; return; }
-        currentUid = session.user.id;
-
-        // ===== 1. 修改：根據 User ID 讀取設定來回填選單 =====
-        const userPrefKey = `prefs_${currentUid}`;
-        try {
-            const saved = JSON.parse(localStorage.getItem(userPrefKey)) || {};
-            if(saved.theme) prefs.theme = saved.theme;
-            if(saved.default_site_id) prefs.default_site_id = saved.default_site_id;
-        } catch(e) {}
-        // ===================================================
-
-        // 載入場域
-        const { data: mems } = await supabase.from("site_memberships").select("site_id").eq("user_id", currentUid).eq("is_active", true);
-        if(mems && mems.length > 0){
-            const siteIds = mems.map(m => m.site_id);
-            const { data: sites } = await supabase.from("sites").select("id, name").in("id", siteIds);
-            const sel = $("default_site_sel");
-            (sites||[]).forEach(s => {
-                const opt = document.createElement("option");
-                opt.value = s.id; opt.textContent = s.name; sel.appendChild(opt);
-            });
-            sel.value = prefs.default_site_id || "";
+        if(!session) { 
+            // 若此處無 session，可能是在 iframe 中，嘗試通知父層或顯示錯誤
+            console.warn("Settings: No session found on init");
+            // 這裡不強制跳轉，以免影響操作體驗，但會影響功能
         }
         
-        // 載入主題
-        selectTheme(prefs.theme || "light");
+        if (session) {
+            currentUid = session.user.id;
 
-        // 檢查現有影片
-        checkVideo('intro');
-        checkVideo('outro');
+            // 根據 User ID 讀取設定來回填選單
+            const userPrefKey = `prefs_${currentUid}`;
+            try {
+                const saved = JSON.parse(localStorage.getItem(userPrefKey)) || {};
+                if(saved.theme) prefs.theme = saved.theme;
+                if(saved.default_site_id) prefs.default_site_id = saved.default_site_id;
+            } catch(e) {}
+
+            // 載入場域
+            const { data: mems } = await supabase.from("site_memberships").select("site_id").eq("user_id", currentUid).eq("is_active", true);
+            if(mems && mems.length > 0){
+                const siteIds = mems.map(m => m.site_id);
+                const { data: sites } = await supabase.from("sites").select("id, name").in("id", siteIds);
+                const sel = $("default_site_sel");
+                (sites||[]).forEach(s => {
+                    const opt = document.createElement("option");
+                    opt.value = s.id; opt.textContent = s.name; sel.appendChild(opt);
+                });
+                sel.value = prefs.default_site_id || "";
+            }
+            
+            // 檢查現有影片
+            checkVideo('intro');
+            checkVideo('outro');
+        }
+        
+        // 載入主題 (即使沒登入也先載入預設)
+        selectTheme(prefs.theme || "light");
     }
 
     // --- 主題與場域 ---
@@ -176,7 +266,7 @@
     };
 
     window.saveSettings = () => {
-        if(!currentUid) return alert("無法識別使用者 ID");
+        if(!currentUid) return alert("無法識別使用者 ID，請確認是否已登入");
 
         const newPrefs = { 
             default_site_id: $("default_site_sel").value, 
@@ -184,13 +274,9 @@
         };
         const jsonStr = JSON.stringify(newPrefs);
 
-        // ===== 2. 修改：同時儲存兩份 (全域 + 個人) =====
-        // 存入「通用 Key」 (讓當前的 theme.js 和 app.html 馬上生效)
+        // 同時儲存兩份 (全域 + 個人)
         localStorage.setItem("app_preferences", jsonStr);
-
-        // 存入「使用者專屬 Key」 (prefs_使用者ID) (為了下次登入記得)
         localStorage.setItem(`prefs_${currentUid}`, jsonStr);
-        // ==============================================
 
         // 通知父視窗變色
         window.parent.postMessage({ type: 'UPDATE_THEME', theme: newPrefs.theme }, '*');
