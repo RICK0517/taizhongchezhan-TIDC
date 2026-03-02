@@ -85,7 +85,12 @@
     let apiKey = localStorage.getItem("gemini_api_key") || "";
 
     // 自動輪替模型清單
-    const MODEL_LIST = ["gemini-3-flash-preview", "gemini-3.1-pro-preview", "gemini-3-pro-preview"];
+   // 修改 ai_manager.html 裡的這一行
+const MODEL_LIST = [
+    "gemini-2.0-flash",         // 這是目前最推薦的「免費主力」，額度高且穩定
+    "gemini-1.5-flash-latest",  // 這是第二穩定的備援
+    "gemini-3-flash-preview"    // 這是最新但目前最擠的預覽版
+];
 
     // 1. 初始化
     if (!apiKey) { setTimeout(() => $("key_modal").showModal(), 500); }
