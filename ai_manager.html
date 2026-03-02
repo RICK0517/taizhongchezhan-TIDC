@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI 智慧管理員</title>
+  <script src="theme.js"></script>
+  <style>
+    /* ===== 基礎樣式 (與主系統一致) ===== */
+    :root {
+      --primary-color: #2196f3; --bg-color: #f4f6f8; --card-bg: #fff;
+      --text-color: #333; --border-color: #e0e0e0;
+      --chat-user-bg: #e3f2fd; --chat-ai-bg: #f5f5f5;
+    }
+    body { font-family: system-ui, Arial; margin: 0; padding: 20px; background: var(--bg-color); color: var(--text-color); display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+    
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-shrink: 0; }
+    .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+    
+    /* 聊天室窗 */
+    #chat_history { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; }
+    
+    .message { max-width: 80%; padding: 10px 15px; border-radius: 12px; line-height: 1.5; font-size: 15px; position: relative; word-wrap: break-word; }
+    .msg-user { align-self: flex-end; background: var(--chat-user-bg); color: #0d47a1; border-bottom-right-radius: 2px; }
+    .msg-ai { align-self: flex-start; background: var(--chat-ai-bg); color: #333; border-bottom-left-radius: 2px; border: 1px solid var(--border-color); }
+    .msg-system { align-self: center; font-size: 12px; color: #888; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 20px; }
+
+    /* 輸入區域 */
+    .input-area { margin-top: 15px; display: flex; gap: 10px; flex-shrink: 0; }
+    input { flex: 1; padding: 12px; border: 1px solid var(--border-color); border-radius: 25px; outline: none; transition: border 0.3s; }
+    input:focus { border-color: var(--primary-color); }
+    
+    button { padding: 10px 20px; background: var(--primary-color); color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: bold; white-space: nowrap; transition: opacity 0.2s; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    button:hover:not(:disabled) { opacity: 0.9; }
+
+    /* 設定 API Key 的彈窗 */
+    dialog { border: none; border-radius: 8px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 90%; max-width: 400px; }
+    dialog::backdrop { background: rgba(0,0,0,0.5); }
+    .key-input { width: 100%; margin: 10px 0; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+    <h2 style="margin:0;">🤖 AI 營運助理</h2>
+    <button onclick="openKeyModal()" style="font-size:12px; padding:6px 12px; background:#607d8b;">🔑 設定金鑰</button>
+</div>
+
+<div class="card">
+    <div id="chat_history">
+        <div class="message msg-ai">你好！我是你的 AI 助理。我可以幫你分析庫存、查詢班表或計算成本。請問今天需要什麼協助？</div>
+    </div>
+    
+    <div style="display:flex; gap:8px; overflow-x:auto; padding:10px 0; margin-top:5px;">
+        <button onclick="askTemplate('inventory')" style="font-size:12px; background:#e0f7fa; color:#006064; border:1px solid #b2ebf2; padding:6px 12px;">📦 檢查庫存狀況</button>
+        <button onclick="askTemplate('schedule')" style="font-size:12px; background:#fff3e0; color:#e65100; border:1px solid #ffe0b2; padding:6px 12px;">📅 查詢今日班表</button>
+        <button onclick="askTemplate('cost')" style="font-size:12px; background:#f3e5f5; color:#4a148c; border:1px solid #e1bee7; padding:6px 12px;">💰 計算停車費率</button>
+    </div>
+
+    <div class="input-area">
+        <input type="text" id="user_input" placeholder="輸入問題..." onkeypress="if(event.key==='Enter') sendMessage()">
+        <button id="btn_send" onclick="sendMessage()">發送</button>
+    </div>
+</div>
+
+<dialog id="key_modal">
+    <h3>設定 AI 金鑰</h3>
+    <p style="font-size:13px; color:#666;">請輸入您的 Google Gemini API Key (免費版)。<br>金鑰僅儲存在您的瀏覽器中，不會上傳伺服器。</p>
+    <input type="password" id="api_key_input" class="key-input" placeholder="貼上 AIza 開頭的金鑰...">
+    <div style="text-align:right; margin-top:10px;">
+        <button onclick="saveKey()">儲存</button>
+        <button onclick="document.getElementById('key_modal').close()" style="background:#ccc;">取消</button>
+    </div>
+</dialog>
+
+<script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    // 務必確認這裡的 URL 和 Key 正確
+    const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2"; 
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const $ = id => document.getElementById(id);
+    let apiKey = localStorage.getItem("gemini_api_key") || "";
+
+    // 自動輪替模型清單
+    const MODEL_LIST = ["gemini-3-flash-preview", "gemini-3.1-pro-preview", "gemini-3-pro-preview"];
+
+    // 1. 初始化
+    if (!apiKey) { setTimeout(() => $("key_modal").showModal(), 500); }
+    window.openKeyModal = () => $("key_modal").showModal();
+    window.saveKey = () => {
+        const key = $("api_key_input").value.trim();
+        if (key) {
+            localStorage.setItem("gemini_api_key", key);
+            apiKey = key;
+            $("key_modal").close();
+            alert("已儲存！");
+        }
+    };
+
+    // ★★★ 2. 診斷版：獲取數據 (會顯示在畫面上) ★★★
+    async function fetchSystemContext(type) {
+        // 檢查網址參數
+        const siteId = new URLSearchParams(window.location.search).get("site_id");
+        if (!siteId) {
+            appendMessage("❌ 錯誤：網址中找不到 site_id。請務必從主控台(app.html)進入此頁面。", "system");
+            return "【系統警告】無法識別場域 ID (site_id missing)";
+        }
+
+        let context = "";
+        
+        // 嘗試抓取庫存
+        if (type === 'inventory' || type === 'all') {
+            appendMessage("🔍 正在讀取庫存資料庫...", "system");
+            const { data: inv, error } = await supabase.from("inventory_items").select("name, last_check_quantity, last_check_status").eq("site_id", siteId);
+            
+            if (error) {
+                appendMessage(`❌ 庫存讀取失敗：${error.message}`, "system");
+            } else if (!inv || inv.length === 0) {
+                appendMessage("⚠️ 庫存資料表是空的 (或是權限不足看不見)", "system");
+                context += "【庫存數據】無資料 (資料庫回傳空值)\n";
+            } else {
+                appendMessage(`✅ 成功抓到 ${inv.length} 筆庫存資料！(AI 已讀取)`, "system");
+                context += `【庫存數據】\n${JSON.stringify(inv)}\n`;
+            }
+        }
+        
+        // 嘗試抓取班表
+        if (type === 'schedule' || type === 'all') {
+            const today = new Date().toISOString().split('T')[0];
+            const { data: sch, error } = await supabase.from("site_schedules").select("person_name, shift").eq("site_id", siteId).eq("work_date", today);
+            
+            if (sch && sch.length > 0) {
+                appendMessage(`✅ 成功抓到 ${sch.length} 筆今日班表！`, "system");
+                context += `【今日班表 ${today}】\n${JSON.stringify(sch)}\n`;
+            }
+        }
+
+        return context;
+    }
+
+    // 3. 發送訊息
+    window.sendMessage = async () => {
+        const input = $("user_input");
+        const msg = input.value.trim();
+        if (!msg) return;
+        if (!apiKey) return alert("請先設定 API Key");
+
+        appendMessage(msg, "user");
+        input.value = "";
+        const btn = $("btn_send");
+        btn.disabled = true;
+        btn.textContent = "診斷中...";
+
+        try {
+            // ★★★ 關鍵修改：更聰明的關鍵字判斷 ★★★
+            let dataType = 'all'; 
+            // 只要稍微沾上邊，就全部抓下來給 AI，避免漏抓
+            if (msg.includes("庫存") || msg.includes("剩") || msg.includes("有") || msg.includes("沒有") || msg.includes("缺")) dataType = 'inventory';
+            if (msg.includes("班") || msg.includes("誰") || msg.includes("人")) dataType = 'schedule';
+            
+            // 如果什麼關鍵字都沒打，預設抓全部 (為了除錯方便)
+            if (dataType === 'all') appendMessage("ℹ️ 未偵測到特定關鍵字，將嘗試讀取所有資料...", "system");
+
+            const contextData = await fetchSystemContext(dataType);
+            
+            const response = await callGeminiSmart(msg, contextData);
+            appendMessage(response, "ai");
+
+        } catch (error) {
+            console.error(error);
+            appendMessage("⚠️ 系統錯誤：" + error.message, "system");
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "發送";
+            $("chat_history").scrollTop = $("chat_history").scrollHeight;
+        }
+    };
+
+    // 4. 智慧呼叫 (Smart Loop)
+    async function callGeminiSmart(userMsg, context) {
+        let lastError = null;
+        for (const model of MODEL_LIST) {
+            try {
+                return await callSingleAPI(model, userMsg, context);
+            } catch (error) {
+                console.warn(`模型 ${model} 失敗: ${error.message}`);
+                lastError = error;
+                if (error.message.includes("high demand") || error.message.includes("not found") || error.message.includes("503")) {
+                    appendMessage(`⏳ ${model} 忙碌，切換備用線路...`, "system");
+                    continue; 
+                }
+                throw error;
+            }
+        }
+        throw new Error("所有 AI 線路皆忙碌，請稍後再試。");
+    }
+
+    async function callSingleAPI(model, userMsg, context) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const systemPrompt = `你是一個專業管理員。請根據以下數據回答。若數據為空，請說「系統沒給我資料」。\n${context}`;
+        
+        const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt + "\n\n問題：" + userMsg }] }] })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message);
+        return data.candidates[0].content.parts[0].text;
+    }
+
+    function appendMessage(text, sender) {
+        const div = document.createElement("div");
+        div.className = `message msg-${sender}`;
+        div.innerHTML = text.replace(/\n/g, "<br>");
+        $("chat_history").appendChild(div);
+        $("chat_history").scrollTop = $("chat_history").scrollHeight;
+    }
+
+    window.askTemplate = (type) => {
+        let q = "";
+        if(type === 'inventory') q = "幫我檢查現在有哪些庫存是不足的？";
+        if(type === 'schedule') q = "今天誰有上班？";
+        $("user_input").value = q;
+        sendMessage();
+    }
+</script>
+</body>
+</html>

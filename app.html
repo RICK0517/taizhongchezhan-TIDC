@@ -238,11 +238,13 @@
         </div>
         
         <div class="nav-category" onclick="toggleNav(this)">
-          <button class="nav-header">小工具<span class="nav-arrow">▼</span></button>
-          <div class="nav-items" onclick="event.stopPropagation()">
-            <button class="nav-btn" onclick="showTool('calc', this)">🧮 計算機</button>
-            <button class="nav-btn" onclick="showTool('fee', this)">💰 金額試算</button>
-          </div>
+            <button class="nav-header">小工具<span class="nav-arrow">▼</span></button>
+         <div class="nav-items" onclick="event.stopPropagation()">
+         <button class="nav-btn" onclick="showTool('calc', this)">🧮 計算機</button>
+         <button class="nav-btn" onclick="showTool('fee', this)">💰 金額試算</button>
+    
+         <button class="nav-btn" onclick="loadPage('./ai_manager.html')">🤖 AI 營運助理</button>
+        </div>
         </div>
 
         <div class="nav-category" onclick="toggleNav(this)">
