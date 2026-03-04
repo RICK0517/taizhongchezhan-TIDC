@@ -74,6 +74,47 @@ function appendMessage(text, sender) {
         $("user_input").value = q;
         sendMessage();
     }
+    window.sendMessage = async function () {
+
+    const input = $("user_input");
+    const text = input.value.trim();
+
+    if(!text) return;
+
+    appendMessage(text, "user");
+    input.value = "";
+
+    $("btn_send").disabled = true;
+
+    try {
+
+        const res = await fetch(
+            "https://whbllncddoqbwukstxel.supabase.co/functions/v1/ai-chat",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    message: text
+                })
+            }
+        );
+
+        const data = await res.json();
+
+        appendMessage(data.reply || "AI 沒有回應", "ai");
+
+    } catch(e) {
+
+        appendMessage("AI 連線失敗", "system");
+        console.error(e);
+
+    }
+
+    $("btn_send").disabled = false;
+
+    }
 </script>
 </body>
 </html>
