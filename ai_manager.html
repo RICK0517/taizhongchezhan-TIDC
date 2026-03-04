@@ -15,106 +15,187 @@
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-shrink: 0; }
     .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; flex-direction: column; flex: 1; overflow: hidden; }
     #chat_history { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; }
-    .message { max-width: 80%; padding: 10px 15px; border-radius: 12px; line-height: 1.5; font-size: 15px; position: relative; word-wrap: break-word; }
+    .message { max-width: 80%; padding: 10px 15px; border-radius: 12px; line-height: 1.5; font-size: 15px; position: relative; word-wrap: break-word; white-space: pre-wrap; }
     .msg-user { align-self: flex-end; background: var(--chat-user-bg); color: #0d47a1; border-bottom-right-radius: 2px; }
     .msg-ai { align-self: flex-start; background: var(--chat-ai-bg); color: #333; border-bottom-left-radius: 2px; border: 1px solid var(--border-color); }
-    .msg-system { align-self: center; font-size: 12px; color: #888; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 20px; }
+    .msg-system { align-self: center; font-size: 12px; color: #666; background: rgba(0,0,0,0.05); padding: 6px 12px; border-radius: 14px; max-width: 95%; }
     .input-area { margin-top: 15px; display: flex; gap: 10px; flex-shrink: 0; }
     input { flex: 1; padding: 12px; border: 1px solid var(--border-color); border-radius: 25px; outline: none; transition: border 0.3s; }
     input:focus { border-color: var(--primary-color); }
     button { padding: 10px 20px; background: var(--primary-color); color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: bold; white-space: nowrap; transition: opacity 0.2s; }
     button:disabled { background: #ccc; cursor: not-allowed; }
     button:hover:not(:disabled) { opacity: 0.9; }
-    dialog { border: none; border-radius: 8px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 90%; max-width: 400px; }
-    dialog::backdrop { background: rgba(0,0,0,0.5); }
-    .key-input { width: 100%; margin: 10px 0; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .pill { font-size: 12px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border-color); background: #fff; color: #444; }
   </style>
 </head>
 <body>
 
 <div class="header">
-    <h2 style="margin:0;">🤖 AI 營運助理</h2>
-    </div>
+  <h2 style="margin:0;">🤖 AI 營運助理</h2>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <span class="pill" id="pill_site">site：未設定</span>
+    <button class="pill" style="cursor:pointer;" id="btn_set_site">手動設定</button>
+  </div>
+</div>
 
 <div class="card">
-    <div id="chat_history">
-        <div class="message msg-ai">你好！我是你的 AI 助理。我可以協助分析庫存、班表、任務與重大事件。請問今天需要什麼協助？</div>
-    </div>
-    
-    <div style="display:flex; gap:8px; overflow-x:auto; padding:10px 0; margin-top:5px;">
-        <button onclick="askTemplate('inventory')" style="font-size:12px; background:#e0f7fa; color:#006064; border:1px solid #b2ebf2; padding:6px 12px;">📦 檢查庫存狀況</button>
-        <button onclick="askTemplate('schedule')" style="font-size:12px; background:#fff3e0; color:#e65100; border:1px solid #ffe0b2; padding:6px 12px;">📅 查詢今日班表</button>
-    </div>
+  <div id="chat_history">
+    <div class="message msg-ai">你好！我可以協助分析庫存、班表、任務與重大事件。請問今天需要什麼協助？</div>
+  </div>
 
-    <div class="input-area">
-        <input type="text" id="user_input" placeholder="輸入問題..." onkeypress="if(event.key==='Enter') sendMessage()">
-        <button id="btn_send" onclick="sendMessage()">發送</button>
-    </div>
+  <div style="display:flex; gap:8px; overflow-x:auto; padding:10px 0; margin-top:5px;">
+    <button onclick="askTemplate('inventory')" style="font-size:12px; background:#e0f7fa; color:#006064; border:1px solid #b2ebf2; padding:6px 12px;">📦 檢查庫存狀況</button>
+    <button onclick="askTemplate('schedule')" style="font-size:12px; background:#fff3e0; color:#e65100; border:1px solid #ffe0b2; padding:6px 12px;">📅 查詢明日班表</button>
+  </div>
+
+  <div class="input-area">
+    <input type="text" id="user_input" placeholder="輸入問題..." onkeypress="if(event.key==='Enter') sendMessage()">
+    <button id="btn_send" onclick="sendMessage()">發送</button>
+  </div>
 </div>
 
 <script type="module">
-    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-    const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2"; 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-    const $ = id => document.getElementById(id);
-    let apiKey = null; // 路線A：AI 金鑰由後端 Edge Function 保管，前端不再儲存
-// （路線A）資料同步與模型呼叫已移到後端 Edge Function
-function appendMessage(text, sender) {
-        const div = document.createElement("div");
-        div.className = `message msg-${sender}`;
-        div.innerHTML = text.replace(/\n/g, "<br>");
-        $("chat_history").appendChild(div);
-        $("chat_history").scrollTop = $("chat_history").scrollHeight;
+  const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_-uGXQX02_yogpjSRjVQImA_FVcaqfQ2";
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const EDGE_FUNCTION_NAME = "smooth-task"; 
+  const $ = (id) => document.getElementById(id);
+
+  function appendMessage(text, sender) {
+    const div = document.createElement("div");
+    div.className = `message msg-${sender}`;
+    div.textContent = text;
+    $("chat_history").appendChild(div);
+    $("chat_history").scrollTop = $("chat_history").scrollHeight;
+  }
+
+  // 修改：同時支援 site 或 site_id 參數
+  function getSiteIdFromUrl() {
+    const sp = new URLSearchParams(location.search);
+    return (sp.get("site_id") || sp.get("site") || "").trim();
+  }
+
+  function setSiteIdToUrl(siteId) {
+    const sp = new URLSearchParams(location.search);
+    sp.set("site_id", siteId); // 統一使用 site_id 鍵名
+    const newUrl = `${location.pathname}?${sp.toString()}`;
+    history.replaceState(null, "", newUrl);
+  }
+
+  async function ensureSiteId() {
+    let siteId = getSiteIdFromUrl();
+    if (siteId) return siteId;
+
+    const input = prompt("請輸入 site_id（場域 ID）");
+    if (!input) return "";
+
+    siteId = input.trim();
+    if (!siteId) return "";
+
+    setSiteIdToUrl(siteId);
+    return siteId;
+  }
+
+  function renderSitePill(siteId) {
+    $("pill_site").textContent = siteId ? `site：${siteId}` : "site：未設定";
+  }
+
+  // 新增：監聽來自父視窗 (app.html) 的 postMessage 通知
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SET_SITE_ID') {
+      const newSiteId = event.data.site_id;
+      if (newSiteId) {
+        setSiteIdToUrl(newSiteId);
+        renderSitePill(newSiteId);
+        appendMessage(`系統提示：場域已同步切換為 ${newSiteId}`, "system");
+      }
     }
+  });
 
-    window.askTemplate = (type) => {
-        let q = type === 'inventory' ? "目前有哪些庫存不足？" : "幫我查查明天的班表。";
-        $("user_input").value = q;
-        sendMessage();
+  $("btn_set_site").addEventListener("click", async () => {
+    const siteId = await ensureSiteId();
+    if (!siteId) {
+      appendMessage("尚未設定 site_id，請再試一次。", "system");
+      renderSitePill("");
+      return;
     }
-    window.sendMessage = async function () {
+    renderSitePill(siteId);
+    appendMessage(`已手動設定場域：${siteId}`, "system");
+  });
 
+  // 初始化顯示
+  renderSitePill(getSiteIdFromUrl());
+
+  window.askTemplate = (type) => {
+    const q = type === "inventory" ? "目前有哪些庫存不足？" : "幫我查查明天的班表 並告訴我名字。";
+    $("user_input").value = q;
+    sendMessage();
+  };
+
+  function pickAnswer(data) {
+    if (!data) return "";
+    if (typeof data.answer === "string" && data.answer) return data.answer;
+    if (typeof data.reply === "string" && data.reply) return data.reply;
+    if (data.message && typeof data.message.content === "string" && data.message.content) return data.message.content;
+    if (typeof data === "string") return data;
+    return "";
+  }
+
+  window.sendMessage = async function () {
     const input = $("user_input");
     const text = input.value.trim();
-
-    if(!text) return;
+    if (!text) return;
 
     appendMessage(text, "user");
     input.value = "";
-
     $("btn_send").disabled = true;
 
+    const site_id = await ensureSiteId();
+    renderSitePill(site_id);
+
+    if (!site_id) {
+      appendMessage("缺少 site_id，網址可用 ?site_id=你的site_id", "system");
+      $("btn_send").disabled = false;
+      return;
+    }
+
+    let token = "";
     try {
+      const { data: sess } = await supabase.auth.getSession();
+      token = sess?.session?.access_token || "";
+    } catch {}
 
-        const res = await fetch(
-            "https://whbllncddoqbwukstxel.supabase.co/functions/v1/ai-chat",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    message: text
-                })
-            }
-        );
+    try {
+      const invokeArgs = {
+        body: { site_id, message: text },
+      };
 
-        const data = await res.json();
+      if (token) {
+        invokeArgs.headers = { Authorization: `Bearer ${token}` };
+      }
 
-        appendMessage(data.reply || "AI 沒有回應", "ai");
+      const { data, error } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, invokeArgs);
 
-    } catch(e) {
-
-        appendMessage("AI 連線失敗", "system");
-        console.error(e);
-
+      if (error) {
+        const status = error.context?.status ?? error.status ?? "";
+        const body = error.context?.body
+          ? (typeof error.context.body === "string" ? error.context.body : JSON.stringify(error.context.body))
+          : "";
+        appendMessage(`後端錯誤 ${status}：${error.message}\n${body}`, "system");
+      } else {
+        const ans = pickAnswer(data);
+        appendMessage(ans || "AI 沒有回應（後端回傳內容沒有 answer/reply/message.content）", "ai");
+      }
+    } catch (e) {
+      appendMessage(`前端例外：${e?.message || String(e)}`, "system");
+      console.error(e);
     }
 
     $("btn_send").disabled = false;
-
-    }
+  };
 </script>
 </body>
 </html>
