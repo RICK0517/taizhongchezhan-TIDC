@@ -34,12 +34,11 @@
 
 <div class="header">
     <h2 style="margin:0;">🤖 AI 營運助理</h2>
-    <button onclick="openKeyModal()" style="font-size:12px; padding:6px 12px; background:#607d8b;">🔑 設定金鑰</button>
-</div>
+    </div>
 
 <div class="card">
     <div id="chat_history">
-        <div class="message msg-ai">你好！我是你的 AI 助理。我現在具備全知視角，可以分析庫存、班表、任務與重大事件。請問今天需要什麼協助？</div>
+        <div class="message msg-ai">你好！我是你的 AI 助理。我可以協助分析庫存、班表、任務與重大事件。請問今天需要什麼協助？</div>
     </div>
     
     <div style="display:flex; gap:8px; overflow-x:auto; padding:10px 0; margin-top:5px;">
@@ -53,16 +52,6 @@
     </div>
 </div>
 
-<dialog id="key_modal">
-    <h3>設定 AI 金鑰</h3>
-    <p style="font-size:13px; color:#666;">請輸入您的 Google Gemini API Key (免費版)。</p>
-    <input type="password" id="api_key_input" class="key-input" placeholder="貼上 AIza 開頭的金鑰...">
-    <div style="text-align:right; margin-top:10px;">
-        <button onclick="saveKey()">儲存</button>
-        <button onclick="document.getElementById('key_modal').close()" style="background:#ccc;">取消</button>
-    </div>
-</dialog>
-
 <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
     const SUPABASE_URL = "https://whbllncddoqbwukstxel.supabase.co";
@@ -70,114 +59,9 @@
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
     const $ = id => document.getElementById(id);
-    let apiKey = localStorage.getItem("gemini_api_key") || "";
-
-    const MODEL_LIST = [
-        "gemini-2.0-flash",
-        "gemini-1.5-flash-latest",
-        "gemini-3-flash-preview"
-    ];
-
-    if (!apiKey) { setTimeout(() => $("key_modal").showModal(), 500); }
-    window.openKeyModal = () => $("key_modal").showModal();
-    window.saveKey = () => {
-        const key = $("api_key_input").value.trim();
-        if (key) {
-            localStorage.setItem("gemini_api_key", key);
-            apiKey = key;
-            $("key_modal").close();
-            alert("已儲存！");
-        }
-    };
-
-    // ★ 結構化資料獲取 (仿 MaxKB) ★
-    async function fetchStructuredContext() {
-        const siteId = new URLSearchParams(window.location.search).get("site_id");
-        if (!siteId) return "【錯誤】未偵測到場域 ID";
-
-        appendMessage("🔍 正在同步全量營運數據...", "system");
-
-        const [inv, sch, tasks, events] = await Promise.all([
-            supabase.from("inventory_items").select("name, last_check_quantity, last_check_status").eq("site_id", siteId),
-            supabase.from("site_schedules").select("work_date, person_name, shift").eq("site_id", siteId).order("work_date", {ascending:false}).limit(60),
-            supabase.from("tasks").select("title, status, body").eq("site_id", siteId).limit(10),
-            supabase.from("site_events").select("event_date, category, content").eq("site_id", siteId).limit(5)
-        ]);
-
-        let report = `### 停車場即時數據報告 (場域: ${siteId}) ###\n\n`;
-
-        report += "【庫存狀態】\n";
-        if(inv.data?.length) inv.data.forEach(i => report += `- 物品: ${i.name} | 數量: ${i.last_check_quantity || '-'} | 狀態: ${i.last_check_status}\n`);
-        else report += "無資料\n";
-
-        report += "\n【班表紀錄 (含多日期)】\n";
-        if(sch.data?.length) sch.data.forEach(s => report += `- 日期: ${s.work_date} | 姓名: ${s.person_name} | 班次: ${s.shift}\n`);
-        else report += "無資料\n";
-
-        report += "\n【近期任務】\n";
-        if(tasks.data?.length) tasks.data.forEach(t => report += `- ${t.title} [${t.status}] ${t.body || ''}\n`);
-        else report += "無資料\n";
-
-        report += "\n【重大行事曆】\n";
-        if(events.data?.length) events.data.forEach(e => report += `- ${e.event_date} | ${e.category}: ${e.content}\n`);
-        else report += "無資料\n";
-
-        return report;
-    }
-
-    window.sendMessage = async () => {
-        const input = $("user_input");
-        const msg = input.value.trim();
-        if (!msg || !apiKey) return;
-
-        appendMessage(msg, "user");
-        input.value = "";
-        const btn = $("btn_send");
-        btn.disabled = true; btn.textContent = "分析中...";
-
-        try {
-            const contextData = await fetchStructuredContext();
-            const response = await callGeminiSmart(msg, contextData);
-            appendMessage(response, "ai");
-        } catch (error) {
-            appendMessage("⚠️ " + error.message, "system");
-        } finally {
-            btn.disabled = false; btn.textContent = "發送";
-            $("chat_history").scrollTop = $("chat_history").scrollHeight;
-        }
-    };
-
-    async function callGeminiSmart(userMsg, context) {
-        for (const model of MODEL_LIST) {
-            try {
-                return await callSingleAPI(model, userMsg, context);
-            } catch (error) {
-                if (error.message.includes("429") || error.message.includes("high demand")) {
-                    appendMessage(`⏳ ${model} 忙碌，切換線路...`, "system");
-                    continue; 
-                }
-                throw error;
-            }
-        }
-        throw new Error("所有 AI 線路皆忙碌，請稍後再試。");
-    }
-
-    async function callSingleAPI(model, userMsg, context) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const systemPrompt = `你是一個專業管理員。請根據數據回答問題。目前你只有「查看」權限，無法修改資料。
-        請根據提供的【數據報告】回答。若使用者問特定日期(如明天或某月某日)，請從班表中搜尋對應日期的紀錄。\n\n${context}`;
-        
-        const res = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt + "\n\n問題：" + userMsg }] }] })
-        });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error.message);
-        return data.candidates[0].content.parts[0].text;
-    }
-
-    function appendMessage(text, sender) {
+    let apiKey = null; // 路線A：AI 金鑰由後端 Edge Function 保管，前端不再儲存
+// （路線A）資料同步與模型呼叫已移到後端 Edge Function
+function appendMessage(text, sender) {
         const div = document.createElement("div");
         div.className = `message msg-${sender}`;
         div.innerHTML = text.replace(/\n/g, "<br>");
